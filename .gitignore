@@ -1,0 +1,15 @@
+# IDE
+.idea/
+.vscode/
+.cursor/
+
+# Build
+compiler/build/
+compiler/generated/
+compiler/ifcc
+
+# Test output files
+testfiles/ifcc-test-output/
+
+# Config mk file
+config.mk.local
