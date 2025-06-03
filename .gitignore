@@ -9,7 +9,7 @@ compiler/generated/
 compiler/ifcc
 
 # Test output files
-testfiles/ifcc-test-output/*
+ifcc-test-output/
 
 # Config mk file
 config.mk.local
