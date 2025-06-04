@@ -9,7 +9,7 @@
 #include "generated/ifccBaseVisitor.h"
 
 #include "SymbolTableVisitor.h"
-#include "CodeGenVisitor.h"
+#include "Visitors.h"
 
 using namespace antlr4;
 using namespace std;
@@ -61,8 +61,8 @@ int main(int argn, const char **argv)
     }
 
     // PHASE 2: Génération de code avec la table des symboles
-    CodeGenVisitor codeGenVisitor(symbolTableVisitor.getSymbolTable());
-    codeGenVisitor.visit(tree);
+    Visitor Visitor(symbolTableVisitor.getSymbolTable());
+    Visitor.visit(tree);
 
     return 0;
 }

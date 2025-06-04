@@ -18,7 +18,7 @@ OBJECTS = \
 	compiler/build/ifccParser.o \
 	compiler/build/main.o \
 	compiler/build/SymbolTableVisitor.o \
-	compiler/build/CodeGenVisitor.o
+	compiler/build/Visitors.o
 
 
 # Final binary
@@ -53,7 +53,7 @@ compiler/generated/ifccLexer.cpp compiler/generated/ifccVisitor.cpp compiler/gen
 
 ##########################################
 # Visual parse tree
-FILE ?= testfiles/1_return42.c
+FILE ?= testfiles/01_return42.c
 
 gui:
 	@mkdir -p compiler/generated compiler/build

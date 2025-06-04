@@ -1,9 +1,9 @@
-#include "CodeGenVisitor.h"
+#include "Visitors.h"
 
-CodeGenVisitor::CodeGenVisitor(const std::map<std::string, int> &symbols) : symbolTable(symbols) {
+Visitor::Visitor(const std::map<std::string, int> &symbols) : symbolTable(symbols) {
 }
 
-antlrcpp::Any CodeGenVisitor::visitProg(ifccParser::ProgContext *ctx) {
+antlrcpp::Any Visitor::visitProg(ifccParser::ProgContext *ctx) {
     // Prologue de la fonction main
 #ifdef __APPLE__
     std::cout << ".globl _main\n";
@@ -46,21 +46,21 @@ antlrcpp::Any CodeGenVisitor::visitProg(ifccParser::ProgContext *ctx) {
     return 0;
 }
 
-antlrcpp::Any CodeGenVisitor::visitReturn_stmt(ifccParser::Return_stmtContext *ctx) {
+antlrcpp::Any Visitor::visitReturn_stmt(ifccParser::Return_stmtContext *ctx) {
     // Évaluer l'expression de retour et placer le résultat dans %eax
     this->visit(ctx->expr());
 
     return 0;
 }
 
-antlrcpp::Any CodeGenVisitor::visitExpr_stmt(ifccParser::Expr_stmtContext *ctx) {
+antlrcpp::Any Visitor::visitExpr_stmt(ifccParser::Expr_stmtContext *ctx) {
     // Évaluer l'expression (peut avoir des effets de bord comme les affectations)
     this->visit(ctx->expr());
 
     return 0;
 }
 
-antlrcpp::Any CodeGenVisitor::visitDecl_stmt(ifccParser::Decl_stmtContext *ctx) {
+antlrcpp::Any Visitor::visitDecl_stmt(ifccParser::Decl_stmtContext *ctx) {
     std::string varName = ctx->VAR()->getText();
     int offset = symbolTable.at(varName);
 
@@ -80,7 +80,7 @@ antlrcpp::Any CodeGenVisitor::visitDecl_stmt(ifccParser::Decl_stmtContext *ctx) 
     return 0;
 }
 
-antlrcpp::Any CodeGenVisitor::visitVarExpr(ifccParser::VarExprContext *ctx) {
+antlrcpp::Any Visitor::visitVarExpr(ifccParser::VarExprContext *ctx) {
     std::string varName = ctx->VAR()->getText();
     int offset = symbolTable.at(varName);
 
@@ -90,7 +90,7 @@ antlrcpp::Any CodeGenVisitor::visitVarExpr(ifccParser::VarExprContext *ctx) {
     return 0;
 }
 
-antlrcpp::Any CodeGenVisitor::visitConstExpr(ifccParser::ConstExprContext *ctx) {
+antlrcpp::Any Visitor::visitConstExpr(ifccParser::ConstExprContext *ctx) {
     int value = std::stoi(ctx->CONST()->getText());
 
     // Charger la constante dans %eax
@@ -99,7 +99,7 @@ antlrcpp::Any CodeGenVisitor::visitConstExpr(ifccParser::ConstExprContext *ctx) 
     return 0;
 }
 
-antlrcpp::Any CodeGenVisitor::visitAssignExpr(ifccParser::AssignExprContext *ctx) {
+antlrcpp::Any Visitor::visitAssignExpr(ifccParser::AssignExprContext *ctx) {
     // Pour une affectation expr = expr
     // D'abord évaluer l'expression de droite (résultat dans %eax)
     this->visit(ctx->expr(1));
@@ -120,14 +120,14 @@ antlrcpp::Any CodeGenVisitor::visitAssignExpr(ifccParser::AssignExprContext *ctx
     return 0;
 }
 
-antlrcpp::Any CodeGenVisitor::visitParensExpr(ifccParser::ParensExprContext *ctx) {
+antlrcpp::Any Visitor::visitParensExpr(ifccParser::ParensExprContext *ctx) {
     // Simplement évaluer l'expression entre parenthèses
     this->visit(ctx->expr());
 
     return 0;
 }
 
-antlrcpp::Any CodeGenVisitor::visitAdditiveExpr(ifccParser::AdditiveExprContext *ctx) {
+antlrcpp::Any Visitor::visitAdditiveExpr(ifccParser::AdditiveExprContext *ctx) {
     // Évaluer l'expression de gauche
     this->visit(ctx->expr(0));
     std::cout << "    pushq %rax\n";
@@ -152,7 +152,7 @@ antlrcpp::Any CodeGenVisitor::visitAdditiveExpr(ifccParser::AdditiveExprContext 
 }
 
 // Nettoyage de visitMultiplicativeExpr (plus de modulo)
-antlrcpp::Any CodeGenVisitor::visitMultiplicativeExpr(ifccParser::MultiplicativeExprContext *ctx) {
+antlrcpp::Any Visitor::visitMultiplicativeExpr(ifccParser::MultiplicativeExprContext *ctx) {
     // Évaluer l'expression de gauche
     this->visit(ctx->expr(0));
     std::cout << "    pushq %rax\n";
@@ -177,7 +177,7 @@ antlrcpp::Any CodeGenVisitor::visitMultiplicativeExpr(ifccParser::Multiplicative
     return 0;
 }
 
-antlrcpp::Any CodeGenVisitor::visitUnaryExpr(ifccParser::UnaryExprContext *ctx) {
+antlrcpp::Any Visitor::visitUnaryExpr(ifccParser::UnaryExprContext *ctx) {
     // Évaluer l'expression interne
     this->visit(ctx->expr());
 

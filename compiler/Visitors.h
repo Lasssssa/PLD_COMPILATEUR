@@ -5,14 +5,14 @@
 #include <map>
 #include <string>
 
-class CodeGenVisitor : public ifccBaseVisitor
+class Visitor : public ifccBaseVisitor
 {
 private:
     std::map<std::string, int> symbolTable; // Table des symboles reçue du SymbolTableVisitor
 
 public:
     // Constructeur qui reçoit la table des symboles
-    CodeGenVisitor(const std::map<std::string, int> &symbols);
+    Visitor(const std::map<std::string, int> &symbols);
 
     virtual antlrcpp::Any visitProg(ifccParser::ProgContext *ctx) override;
     virtual antlrcpp::Any visitReturn_stmt(ifccParser::Return_stmtContext *ctx) override;
