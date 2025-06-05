@@ -1,0 +1,38 @@
+{
+  "name": "ANTLR4 Dev",
+  "image": "ubuntu-antlr4:dev",
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash",
+        "c_cpp_properties": {
+          "configurations": [
+            {
+              "name": "Linux",
+              "includePath": [
+                "${workspaceFolder}/**",
+                "/usr/local/include/antlr4-runtime/**"
+              ],
+              "defines": [],
+              "compilerPath": "/usr/bin/gcc",
+              "cStandard": "c17",
+              "cppStandard": "gnu++17",
+              "intelliSenseMode": "linux-gcc-x64"
+            }
+          ],
+          "version": 4
+        }
+      },
+      "extensions": [
+        "mike-lischke.vscode-antlr4",
+        "ms-vscode.cpptools-extension-pack"
+      ]
+    }
+  },
+  "mounts": [
+    "type=bind,source=${localWorkspaceFolder},target=/app"
+  ],
+  "remoteUser": "root",
+  "workspaceFolder": "/app",
+  "postCreateCommand": "ldconfig"
+}

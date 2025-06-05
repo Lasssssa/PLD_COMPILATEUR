@@ -1,0 +1,1 @@
+docker build --rm -t ubuntu-antlr4:dev -f Dockerfile .
