@@ -1,5 +1,5 @@
 # Include your machine-specific config (contains paths to ANTLR etc.)
-include config.mk
+include config.mk.local
 
 CC = g++
 CCFLAGS = -g -c -std=c++17 -I$(ANTLRINC) -Wno-attributes
