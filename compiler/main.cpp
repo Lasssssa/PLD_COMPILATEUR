@@ -1,68 +1,41 @@
 #include <iostream>
 #include <fstream>
-#include <sstream>
-#include <cstdlib>
-
-#include "antlr4-runtime.h"
+#include <string>
+#include "visitor_ir.h"
 #include "generated/ifccLexer.h"
 #include "generated/ifccParser.h"
-#include "generated/ifccBaseVisitor.h"
-
-#include "SymbolTableVisitor.h"
-#include "Visitors.h"
+#include "antlr4-runtime.h"
 
 using namespace antlr4;
 using namespace std;
 
-int main(int argn, const char **argv)
-{
-    stringstream in;
-    if (argn == 2)
-    {
-        ifstream lecture(argv[1]);
-        if (!lecture.good())
-        {
-            cerr << "error: cannot read file: " << argv[1] << endl;
-            exit(1);
-        }
-        in << lecture.rdbuf();
-    }
-    else
-    {
-        cerr << "usage: ifcc path/to/file.c" << endl;
-        exit(1);
+int main(int argc, const char* argv[]) {
+    if (argc != 2) {
+        cerr << "Usage: " << argv[0] << " <input_file>" << endl;
+        return 1;
     }
 
-    ANTLRInputStream input(in.str());
+    // Lecture du fichier d'entrée
+    ifstream file(argv[1]);
+    if (!file.is_open()) {
+        cerr << "Error: Could not open file " << argv[1] << endl;
+        return 1;
+    }
 
+    // Création du lexer et du parser
+    ANTLRInputStream input(file);
     ifccLexer lexer(&input);
     CommonTokenStream tokens(&lexer);
-
-    tokens.fill();
-
     ifccParser parser(&tokens);
-    tree::ParseTree *tree = parser.axiom();
 
-    if (parser.getNumberOfSyntaxErrors() != 0)
-    {
-        cerr << "error: syntax error during parsing" << endl;
-        exit(1);
-    }
+    // Création d'une table des symboles vide
+    map<string, int> emptySymbolTable;
+    
+    // Création du visiteur avec la table des symboles vide
+    VisitorIR visitor(emptySymbolTable);
 
-    // PHASE 1: Analyse sémantique et construction de la table des symboles
-    SymbolTableVisitor symbolTableVisitor;
-    symbolTableVisitor.visit(tree);
-
-    // Vérifier s'il y a eu des erreurs sémantiques
-    if (symbolTableVisitor.hasSemanticErrors())
-    {
-        cerr << "error: semantic errors found during analysis" << endl;
-        exit(1);
-    }
-
-    // PHASE 2: Génération de code avec la table des symboles
-    Visitor Visitor(symbolTableVisitor.getSymbolTable());
-    Visitor.visit(tree);
+    // Visite de l'AST - cela va générer le code assembleur
+    visitor.visitProg(parser.prog());
 
     return 0;
 }

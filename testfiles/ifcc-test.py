@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 import argparse
 import glob
 import os
@@ -8,11 +6,19 @@ import sys
 import subprocess
 import textwrap
 
-################################################################################
-## SETUP & ARGPARSE
-
 width = shutil.get_terminal_size().columns - 2
 twf = lambda text: textwrap.fill(text, width, initial_indent=' ' * 4, subsequent_indent=' ' * 6)
+
+def color(text, code):
+    return f"\033[{code}m{text}\033[0m"
+
+GREEN = lambda t: color(t, "32")
+RED = lambda t: color(t, "31")
+YELLOW = lambda t: color(t, "33")
+BLUE = lambda t: color(t, "34")
+BOLD = lambda t: color(t, "1")
+
+SEP = lambda: print(BOLD("-" * width))
 
 argparser = argparse.ArgumentParser(
     formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -36,10 +42,12 @@ argparser.add_argument('-o', '--output', metavar='OUTPUTNAME', help='name of out
 args = argparser.parse_args()
 orig_cwd = os.getcwd()
 
+def status(msg, icon="🔹", color_func=BLUE):
+    print(color_func(f"{icon} {msg}"))
+
 if args.debug >= 2:
     print('debug: command-line arguments', args)
 
-# Resolve base dir
 pld_base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 IFCC = os.path.join(pld_base_dir, 'compiler', 'ifcc')
 
@@ -48,11 +56,10 @@ if args.debug:
     print("IFCC path =", IFCC)
 
 if not os.path.isfile(IFCC) or not os.access(IFCC, os.X_OK):
-    print(f"error: compiler/ifcc not found or not executable at: {IFCC}")
+    print(RED(f"❌ error: compiler/ifcc not found or not executable at: {IFCC}"))
     sys.exit(127)
 
 def run_command(string, logfile=None, toscreen=False):
-    """Execute `string` as shell command. Optionally write output to `logfile` and/or stdout."""
     if args.debug:
         print("CMD:", string)
 
@@ -63,10 +70,8 @@ def run_command(string, logfile=None, toscreen=False):
             log.write(line)
             if toscreen:
                 sys.stdout.write(line)
-
         process.wait()
         log.write(f'\nexit status: {process.returncode}\n')
-
     return process.returncode
 
 def dumpfile(name, quiet=False):
@@ -76,54 +81,49 @@ def dumpfile(name, quiet=False):
         print(data, end='')
     return data
 
-# Safety: don't run inside output dir
 if "ifcc-test-output" in orig_cwd:
-    print("error: cannot run ifcc-test.py from within its own output directory")
+    print(RED("❌ error: cannot run ifcc-test.py from within its own output directory"))
     sys.exit(1)
 
-# Cleanup previous test output
 test_output_dir = os.path.join(pld_base_dir, 'ifcc-test-output')
 if os.path.isdir(test_output_dir):
     shutil.rmtree(test_output_dir)
 
-# Rebuild ifcc
+status("Rebuilding ifcc...", icon="🔧")
 if run_command(f'cd {pld_base_dir}/compiler && make --question ifcc'):
     if run_command(f'cd {pld_base_dir}/compiler && make ifcc', toscreen=True):
-        print("error: compilation of ifcc failed.")
+        print(RED("❌ error: compilation of ifcc failed."))
         sys.exit(1)
-
-############################################
-## SINGLE-FILE MODE
 
 if args.S or args.c or args.output:
     if args.S and args.c:
-        print("error: options -S and -c are not compatible")
+        print(RED("❌ error: options -S and -c are not compatible"))
         sys.exit(1)
     if len(args.input) > 1:
-        print("error: only one input file allowed in single-file mode")
+        print(RED("❌ error: only one input file allowed in single-file mode"))
         sys.exit(1)
 
     inputfile = args.input[0]
     if not inputfile.endswith(".c"):
-        print("error: input file must have .c extension")
+        print(RED("❌ error: input file must have .c extension"))
         sys.exit(1)
     if not os.path.exists(inputfile):
-        print(f"error: input file does not exist: {inputfile}")
+        print(RED(f"❌ error: input file does not exist: {inputfile}"))
         sys.exit(1)
 
     if (args.S or args.c) and not args.output:
-        print("error: -o is required when using -S or -c")
+        print(RED("❌ error: -o is required when using -S or -c"))
         sys.exit(1)
 
     if args.S:
         if not args.output.endswith(".s"):
-            print("error: output file must end with .s")
+            print(RED("❌ error: output file must end with .s"))
             sys.exit(1)
         sys.exit(run_command(f'{IFCC} {inputfile} > {args.output}', toscreen=True))
 
     if args.c:
         if not args.output.endswith(".o"):
-            print("error: output file must end with .o")
+            print(RED("❌ error: output file must end with .o"))
             sys.exit(1)
         asm = args.output.replace(".o", ".s")
         if run_command(f'{IFCC} {inputfile} > {asm}', toscreen=True):
@@ -131,16 +131,13 @@ if args.S or args.c or args.output:
         sys.exit(run_command(f'gcc -c -o {args.output} {asm}', toscreen=True))
 
     if args.output.endswith((".o", ".s", ".c")):
-        print("error: executable cannot end with .o, .s, or .c")
+        print(RED("❌ error: executable cannot end with .o, .s, or .c"))
         sys.exit(1)
 
     asm = args.output + ".s"
     if run_command(f'{IFCC} {inputfile} > {asm}', toscreen=True):
         sys.exit(1)
     sys.exit(run_command(f'gcc -o {args.output} {asm}', toscreen=True))
-
-############################################
-## MULTI-FILE MODE
 
 inputfiles = []
 for path in args.input:
@@ -155,12 +152,12 @@ for path in args.input:
                 if f.endswith(".c"):
                     inputfiles.append(os.path.join(dirpath, f))
     else:
-        print(f"error: cannot read input path {path}")
+        print(RED(f"❌ error: cannot read input path {path}"))
         sys.exit(1)
 
 inputfiles = sorted(set(inputfiles))
 if not inputfiles:
-    print("error: no .c test-cases found.")
+    print(RED("❌ error: no .c test-cases found."))
     sys.exit(1)
 
 os.mkdir(test_output_dir)
@@ -177,8 +174,9 @@ for f in inputfiles:
 all_ok = True
 
 for job in jobs:
+    SEP()
+    print(BOLD(f"🧪 TEST-CASE: {job}"))
     os.chdir(os.path.join(test_output_dir, job))
-    print(f"TEST-CASE: {job}")
 
     gcc_ok = run_command("gcc -S -o asm-gcc.s input.c", "gcc-compile.txt") == 0
     if gcc_ok:
@@ -191,14 +189,14 @@ for job in jobs:
     ifcc_ok = run_command(f'{IFCC} input.c > asm-ifcc.s', "ifcc-compile.txt") == 0
 
     if not gcc_ok and not ifcc_ok:
-        print("TEST OK")
+        print(GREEN("✅ TEST OK (both rejected the program)"))
         continue
     if not gcc_ok and ifcc_ok:
-        print("TEST FAIL (your compiler accepts an invalid program)")
+        print(RED("❌ TEST FAIL (your compiler accepts an invalid program)"))
         all_ok = False
         continue
     if gcc_ok and not ifcc_ok:
-        print("TEST FAIL (your compiler rejects a valid program)")
+        print(RED("❌ TEST FAIL (your compiler rejects a valid program)"))
         all_ok = False
         if args.verbose:
             dumpfile("asm-ifcc.s")
@@ -206,7 +204,7 @@ for job in jobs:
         continue
 
     if run_command("gcc -o exe-ifcc asm-ifcc.s", "ifcc-link.txt"):
-        print("TEST FAIL (your compiler produced invalid assembly)")
+        print(RED("❌ TEST FAIL (your compiler produced invalid assembly)"))
         all_ok = False
         if args.verbose:
             dumpfile("asm-ifcc.s")
@@ -215,16 +213,17 @@ for job in jobs:
 
     run_command("./exe-ifcc", "ifcc-execute.txt")
     if open("gcc-execute.txt").read() != open("ifcc-execute.txt").read():
-        print("TEST FAIL (different outputs at runtime)")
+        print(RED("❌ TEST FAIL (different outputs at runtime)"))
         all_ok = False
         if args.verbose:
-            print("GCC:")
+            print(YELLOW("🔸 GCC:"))
             dumpfile("gcc-execute.txt")
-            print("You:")
+            print(YELLOW("🔸 IFCC:"))
             dumpfile("ifcc-execute.txt")
         continue
 
-    print("TEST OK")
+    print(GREEN("✅ TEST OK"))
 
+SEP()
 if not all_ok and not args.verbose:
-    print("Some test-cases failed. Use --verbose for more information.")
+    print(YELLOW("⚠️  Some test-cases failed. Use --verbose for more information."))

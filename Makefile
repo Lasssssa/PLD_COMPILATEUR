@@ -18,7 +18,11 @@ OBJECTS = \
 	compiler/build/ifccParser.o \
 	compiler/build/main.o \
 	compiler/build/SymbolTableVisitor.o \
-	compiler/build/Visitors.o
+	compiler/build/Visitors.o \
+	compiler/build/IR.o \
+	compiler/build/DefFonction.o \
+	compiler/build/visitor_ir.o \
+	compiler/build/type.o
 
 
 # Final binary
