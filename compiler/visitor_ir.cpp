@@ -39,15 +39,13 @@ antlrcpp::Any VisitorIR::visitProg(ifccParser::ProgContext *ctx) {
     cfgs["main"] = current_cfg;
     currentFunctionName = "main";
     
-    // Créer le premier bloc de base
     current_bb = new BasicBlock(current_cfg, "BB_0");
-    current_cfg->add_bb(current_bb);
-    
+
     // Visiter les instructions du programme
     for (auto stmt : ctx->stmt()) {
         visit(stmt);
     }
-    
+
     // Générer le code assembleur une seule fois
     std::cout << "\t.section\t.text\n";
     std::cout << "\t.globl\tmain\n";
@@ -64,6 +62,7 @@ antlrcpp::Any VisitorIR::visitProg(ifccParser::ProgContext *ctx) {
     
     // Générer le code des blocs de base
     for (auto bb : current_cfg->get_bbs()) {
+
         // Générer le label du bloc
         std::cout << bb->get_name() << ":\n";
         
