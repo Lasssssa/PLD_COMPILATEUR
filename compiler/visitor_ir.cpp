@@ -62,8 +62,20 @@ antlrcpp::Any VisitorIR::visitProg(ifccParser::ProgContext *ctx) {
     std::cout << "\tmovq\t%rsp, %rbp\n";
 
     // Allouer l'espace pour les variables locales
-    const int STACK_SIZE = 16;  // Taille minimale de 16 octets pour l'alignement
-    std::cout << "\tsubq\t$" << STACK_SIZE << ", %rsp\n";
+    int maxNegOffset = 0;
+    for (const auto &p: symbolTable) {
+        if (p.second < maxNegOffset)
+            maxNegOffset = p.second;
+    }
+    int stackSize = -maxNegOffset; // taille en octets
+    if (stackSize > 0) {
+        // Arrondir à 16 pour l'alignement
+        int aligned = ((stackSize + 15) / 16) * 16;
+        std::cout << "\tsubq\t$" << aligned << ", %rsp\n";
+    } else {
+        // Taille minimale de 16 octets pour l'alignement
+        std::cout << "\tsubq\t$16, %rsp\n";
+    }
 
     // Générer le code des blocs de base
     for (auto bb: current_cfg->get_bbs()) {
