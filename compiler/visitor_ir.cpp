@@ -114,14 +114,24 @@ antlrcpp::Any VisitorIR::visitReturn_stmt(ifccParser::Return_stmtContext *ctx) {
         antlrcpp::Any result = visit(ctx->expr());
         try {
             string resultStr = any_cast<string>(result);
-            current_bb->add_IRInstr(IRInstr::Operation::wmem, Type::INT_TYPE, {"!0", resultStr});
+            
+            // Si le résultat est déjà dans une variable temporaire, l'utiliser directement
+            if (resultStr[0] == '!') {
+                // Le résultat est déjà dans une variable temporaire, l'utiliser directement
+                current_bb->add_IRInstr(IRInstr::Operation::ret, Type::INT_TYPE, {resultStr});
+            } else {
+                // Copier dans la variable de retour
+                current_bb->add_IRInstr(IRInstr::Operation::wmem, Type::INT_TYPE, {"!0", resultStr});
+                current_bb->add_IRInstr(IRInstr::Operation::ret, Type::INT_TYPE, {"!0"});
+            }
         } catch (const std::bad_any_cast &e) {
             std::cerr << "Error: Invalid return value type" << std::endl;
             return 0;
         }
+    } else {
+        current_bb->add_IRInstr(IRInstr::Operation::ret, Type::INT_TYPE, {"!0"});
     }
 
-    current_bb->add_IRInstr(IRInstr::Operation::ret, Type::INT_TYPE, {"!0"});
     return 0;
 }
 

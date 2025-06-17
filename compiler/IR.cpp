@@ -9,16 +9,13 @@ using std::ostream;
 
 string IR_reg_to_asm(string reg) {
     if (reg[0] == '%') {
-        // Si c'est déjà un registre assembleur, le retourner tel quel
         return reg;
     }
-    // Si c'est une variable locale (format "!X")
     if (reg[0] == '!') {
         int offset = stoi(reg.substr(1));
-        // Les variables locales sont stockées à des offsets négatifs par rapport à %rbp
-        return to_string(-4 * offset) + "(%rbp)";
+        // Toutes les variables commencent à -4(%rbp) pour éviter les conflits sur macOS
+        return to_string(-4 * (offset + 1)) + "(%rbp)";
     }
-    // Pour les autres cas, retourner le registre tel quel
     return reg;
 }
 
@@ -58,6 +55,9 @@ void IRInstr::gen_asm_x86(ostream &o) {
             o << "\tmovl\t%eax, " << IR_reg_to_asm(params[0]) << "\n";
             break;
         case wmem:
+            if (params[0] == params[1]) {
+                break;
+            }
             o << "\tmovl\t" << IR_reg_to_asm(params[1]) << ", %eax\n";
             o << "\tmovl\t%eax, " << IR_reg_to_asm(params[0]) << "\n";
             break;
