@@ -8,14 +8,17 @@ antlrcpp::Any SymbolTableVisitor::visitProg(ifccParser::ProgContext *ctx)
 {
     std::cerr << "=== ANALYSE DE LA TABLE DES SYMBOLES ===" << std::endl;
 
-    // Visiter tous les statements
-    for (auto stmt : ctx->stmt())
+    // Visiter toutes les fonctions
+    for (auto func : ctx->function())
     {
-        this->visit(stmt);
+        this->visit(func);
     }
 
     // Vérifier les variables non utilisées
     checkUnusedVariables();
+
+    // Vérifier la présence de la fonction main
+    checkMainFunction();
 
     std::cerr << "=== TABLE DES SYMBOLES FINALE ===" << std::endl;
     for (const auto &pair : symbolTable)
@@ -24,6 +27,55 @@ antlrcpp::Any SymbolTableVisitor::visitProg(ifccParser::ProgContext *ctx)
     }
     std::cerr << "========================================" << std::endl;
 
+    return 0;
+}
+
+antlrcpp::Any SymbolTableVisitor::visitFunction(ifccParser::FunctionContext *ctx)
+{
+    std::string funcName = ctx->VAR()->getText();
+    std::cerr << "=== ANALYSE DE LA FONCTION '" << funcName << "' ===" << std::endl;
+    
+    // Ajouter la fonction à la liste des fonctions déclarées
+    declaredFunctions.insert(funcName);
+    
+    // Définir la fonction courante
+    currentFunction = funcName;
+    
+    // Réinitialiser la table des symboles pour cette fonction
+    symbolTable.clear();
+    declaredVars.clear();
+    usedVars.clear();
+    currentOffset = -8; // Commencer à -8 pour les variables locales
+    
+    // Traiter les paramètres
+    if (ctx->param_list())
+    {
+        this->visit(ctx->param_list());
+    }
+    
+    // Visiter tous les statements de la fonction
+    for (auto stmt : ctx->stmt())
+    {
+        this->visit(stmt);
+    }
+    
+    return 0;
+}
+
+antlrcpp::Any SymbolTableVisitor::visitParam_list(ifccParser::Param_listContext *ctx)
+{
+    // Les paramètres sont stockés à des offsets positifs
+    int paramOffset = 16; // Commencer après %rbp et l'adresse de retour
+    
+    for (auto param : ctx->VAR())
+    {
+        std::string paramName = param->getText();
+        symbolTable[paramName] = paramOffset;
+        declaredVars.insert(paramName);
+        std::cerr << "Paramètre: '" << paramName << "' assigné à l'offset " << paramOffset << std::endl;
+        paramOffset += 8; // Chaque paramètre prend 8 octets
+    }
+    
     return 0;
 }
 
@@ -138,4 +190,78 @@ void SymbolTableVisitor::checkUnusedVariables()
     {
         std::cerr << "Toutes les variables déclarées sont utilisées." << std::endl;
     }
+}
+
+void SymbolTableVisitor::checkMainFunction()
+{
+    std::cerr << "=== VÉRIFICATION DE LA FONCTION MAIN ===" << std::endl;
+    
+    if (declaredFunctions.find("main") == declaredFunctions.end())
+    {
+        std::cerr << "ERREUR: Fonction 'main' manquante dans le programme!" << std::endl;
+        hasErrors = true;
+    }
+    else
+    {
+        std::cerr << "Fonction 'main' trouvée." << std::endl;
+    }
+}
+
+antlrcpp::Any SymbolTableVisitor::visitCallExpr(ifccParser::CallExprContext *ctx) {
+    // Visiter tous les arguments de l'appel de fonction
+    if (ctx->arg_list()) {
+        for (auto expr : ctx->arg_list()->expr()) {
+            this->visit(expr);
+        }
+    }
+    return 0;
+}
+
+antlrcpp::Any SymbolTableVisitor::visitConstExpr(ifccParser::ConstExprContext *ctx) {
+    // Rien à faire pour les constantes
+    return 0;
+}
+
+antlrcpp::Any SymbolTableVisitor::visitAdditiveExpr(ifccParser::AdditiveExprContext *ctx) {
+    // Visiter les deux opérandes
+    this->visit(ctx->expr(0));
+    this->visit(ctx->expr(1));
+    return 0;
+}
+
+antlrcpp::Any SymbolTableVisitor::visitMultiplicativeExpr(ifccParser::MultiplicativeExprContext *ctx) {
+    // Visiter les deux opérandes
+    this->visit(ctx->expr(0));
+    this->visit(ctx->expr(1));
+    return 0;
+}
+
+antlrcpp::Any SymbolTableVisitor::visitUnaryExpr(ifccParser::UnaryExprContext *ctx) {
+    // Visiter l'opérande
+    this->visit(ctx->expr());
+    return 0;
+}
+
+antlrcpp::Any SymbolTableVisitor::visitParensExpr(ifccParser::ParensExprContext *ctx) {
+    // Visiter l'expression entre parenthèses
+    this->visit(ctx->expr());
+    return 0;
+}
+
+antlrcpp::Any SymbolTableVisitor::visitReturn_stmt(ifccParser::Return_stmtContext *ctx) {
+    std::cerr << "Traitement d'une instruction return dans la fonction '" << currentFunction << "'..." << std::endl;
+    
+    // Marquer que la fonction courante a un return
+    functionsWithReturn.insert(currentFunction);
+    std::cerr << "Fonction '" << currentFunction << "' marquée comme ayant un return" << std::endl;
+    
+    // Traiter l'expression si elle existe
+    if (ctx->expr()) {
+        std::cerr << "Return avec expression..." << std::endl;
+        this->visit(ctx->expr());
+    } else {
+        std::cerr << "Return sans expression..." << std::endl;
+    }
+    
+    return 0;
 }

@@ -156,6 +156,9 @@ public:
     // Ajouter cette méthode pour accéder aux blocs de base
     const vector<BasicBlock *> &get_bbs() const { return bbs; }
 
+    // Add this method to access the symbol count
+    int get_symbol_count() const { return nextFreeSymbolIndex; }
+
 protected:
     map<string, Type> SymbolType; /**< part of the symbol table  */
     map<string, int> SymbolIndex; /**< part of the symbol table  */

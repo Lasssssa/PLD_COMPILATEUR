@@ -2,7 +2,9 @@ grammar ifcc;
 
 axiom : prog EOF ;
 
-prog : 'int' 'main' '(' ')' '{' stmt* '}' ;
+prog : function* EOF ;
+
+function : 'int' VAR '(' param_list? ')' '{' stmt* '}' ;
 
 stmt: return_stmt
     | decl_stmt
@@ -14,16 +16,22 @@ expr_stmt: expr ';' ;
 decl_stmt: 'int' VAR ';' | 'int' VAR '=' expr ';' ;
 
 // Expression avec priorités (du plus bas au plus haut)
-expr
-    : expr ASSIGN <assoc=right> expr             # assignExpr
-    | expr (EQ | NEQ | LT | GT | LE | GE) expr   # comparisonExpr
-    | (PLUS | MINUS) expr                        # unaryExpr
-    | expr (MULT | DIV) expr                     # multiplicativeExpr
-    | expr (PLUS | MINUS) expr                   # additiveExpr
-    | VAR                                        # varExpr
-    | CONST                                      # constExpr
-    | '(' expr ')'                               # parensExpr
-    ;
+expr : expr ASSIGN <assoc=right> expr             # assignExpr
+     | expr (EQ | NEQ | LT | GT | LE | GE) expr   # comparisonExpr
+     | (PLUS | MINUS) expr                        # unaryExpr
+     | expr (MULT | DIV) expr                     # multiplicativeExpr
+     | expr (PLUS | MINUS) expr                   # additiveExpr
+     | VAR '(' arg_list? ')'                      # callExpr
+     | VAR                                        # varExpr
+     | CONST                                      # constExpr
+     | '(' expr ')'                               # parensExpr
+     ;
+
+// Liste de paramètres
+param_list : 'int' VAR (',' 'int' VAR)* ;
+
+// Liste d'arguments
+arg_list : expr (',' expr)* ;
 
 RETURN : 'return' ;
 VAR : [a-zA-Z_][a-zA-Z0-9_]* ;

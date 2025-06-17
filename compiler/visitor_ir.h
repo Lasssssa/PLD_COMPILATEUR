@@ -64,6 +64,10 @@ public:
     virtual antlrcpp::Any visitMultiplicativeExpr(ifccParser::MultiplicativeExprContext *ctx) override;
     virtual antlrcpp::Any visitUnaryExpr(ifccParser::UnaryExprContext *ctx) override;
     virtual antlrcpp::Any visitParensExpr(ifccParser::ParensExprContext *ctx) override;
+    virtual antlrcpp::Any visitFunction(ifccParser::FunctionContext *ctx) override;
+    virtual antlrcpp::Any visitCallExpr(ifccParser::CallExprContext *ctx) override;
+    virtual antlrcpp::Any visitParam_list(ifccParser::Param_listContext *ctx) override;
+    virtual antlrcpp::Any visitArg_list(ifccParser::Arg_listContext *ctx) override;
     virtual antlrcpp::Any visitComparisonExpr(ifccParser::ComparisonExprContext *ctx) override;
 };
 

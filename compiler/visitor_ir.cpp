@@ -40,101 +40,123 @@ void VisitorIR::setCurrentBB(BasicBlock *bb)
 
 antlrcpp::Any VisitorIR::visitProg(ifccParser::ProgContext *ctx)
 {
-    // Create the main function
-    DefFonction *main = new DefFonction("main", Type::INT_TYPE, {});
-    current_cfg = new CFG(main);
+    // Générer le prologue global
+    std::cout << "\t.text\n";
 
-    cfgs["main"] = current_cfg;
+    // Visiter toutes les fonctions pour construire les CFG
+    for (auto func : ctx->function())
+    {
+        this->visit(func);
+    }
 
-    currentFunctionName = "main";
+    // Générer le code assembleur pour toutes les fonctions
+    for (const auto &pair : cfgs)
+    {
+        std::string funcName = pair.first;
+        CFG *cfg = pair.second;
 
-    current_bb = new BasicBlock(current_cfg, "BB_0");
+        // Déclarer la fonction comme globale
+        std::cout << "\t.globl\t" << funcName << "\n";
 
-    // Visit all statements
+        // Ajouter le label de la fonction
+        std::cout << funcName << ":\n";
+
+        // Générer le prologue de la fonction
+        cfg->gen_asm_prologue(std::cout);
+
+        // Générer le code de tous les blocs de base
+        for (auto bb : cfg->get_bbs())
+        {
+            bb->gen_asm_x86(std::cout);
+        }
+
+        // Générer l'épilogue de la fonction
+        cfg->gen_asm_epilogue(std::cout);
+
+        // Ajouter les directives de taille pour la fonction
+#ifdef ARM
+        std::cout << "\t.size " << funcName << ", .-" << funcName << "\n";
+#else
+#ifndef __APPLE__
+        std::cout << "\t.size\t" << funcName << ", .-" << funcName << "\n";
+#endif
+#endif
+    }
+
+#ifndef __APPLE__
+    std::cout << "\t.section\t.note.GNU-stack,\"\",@progbits\n";
+#endif
+
+    return 0;
+}
+
+antlrcpp::Any VisitorIR::visitFunction(ifccParser::FunctionContext *ctx)
+{
+    std::string funcName = ctx->VAR()->getText();
+
+    // Créer la fonction
+    std::vector<Param> params;
+    if (ctx->param_list())
+    {
+        // Traiter les paramètres
+        antlrcpp::Any paramResult = visit(ctx->param_list());
+        try
+        {
+            params = any_cast<std::vector<Param>>(paramResult);
+        }
+        catch (const std::bad_any_cast &e)
+        {
+            std::cerr << "Error: Invalid parameter list type" << std::endl;
+        }
+    }
+
+    DefFonction *func = new DefFonction(funcName, Type::INT_TYPE, params);
+    current_cfg = new CFG(func);
+    cfgs[funcName] = current_cfg;
+    currentFunctionName = funcName;
+
+    // Créer le bloc de base (il sera automatiquement ajouté au CFG)
+    current_bb = new BasicBlock(current_cfg, funcName + "_BB_" + to_string(nextBBnumber++));
+
+    // Ajouter les paramètres à la table des symboles et les récupérer depuis les registres
+    for (size_t i = 0; i < params.size(); i++)
+    {
+        current_cfg->add_to_symbol_table(params[i].name, params[i].type);
+        string paramVar = "!" + to_string(current_cfg->get_var_index(params[i].name));
+
+        // Récupérer les paramètres depuis les registres selon la convention x86_64
+        if (i == 0)
+        {
+            current_bb->add_IRInstr(IRInstr::Operation::wmem, Type::INT_TYPE, {paramVar, "%edi"});
+        }
+        else if (i == 1)
+        {
+            current_bb->add_IRInstr(IRInstr::Operation::wmem, Type::INT_TYPE, {paramVar, "%esi"});
+        }
+        else if (i == 2)
+        {
+            current_bb->add_IRInstr(IRInstr::Operation::wmem, Type::INT_TYPE, {paramVar, "%edx"});
+        }
+        else if (i == 3)
+        {
+            current_bb->add_IRInstr(IRInstr::Operation::wmem, Type::INT_TYPE, {paramVar, "%ecx"});
+        }
+        else if (i == 4)
+        {
+            current_bb->add_IRInstr(IRInstr::Operation::wmem, Type::INT_TYPE, {paramVar, "%r8d"});
+        }
+        else if (i == 5)
+        {
+            current_bb->add_IRInstr(IRInstr::Operation::wmem, Type::INT_TYPE, {paramVar, "%r9d"});
+        }
+        // Pour plus de 6 paramètres, ils seraient sur la pile
+    }
+
+    // Visiter les instructions de la fonction
     for (auto stmt : ctx->stmt())
     {
         visit(stmt);
     }
-
-#ifdef ARM
-    // ARM assembly output
-    std::cout << "\t.arch armv8-a\n";
-    std::cout << "\t.text\n";
-    std::cout << "\t.align 2\n";
-    std::cout << "\t.global main\n";
-    std::cout << "\t.type main, %function\n";
-    std::cout << "main:\n";
-#else
-    // x86 assembly output
-#ifdef __APPLE__
-    std::cout << ".globl _main\n";
-    std::cout << "_main:\n";
-#else
-    std::cout << "\t.section\t.text\n";
-    std::cout << ".globl main\n";
-    std::cout << "main:\n";
-    std::cout << "\t.type\tmain, @function\n";
-#endif
-#endif
-
-    // Generate prologue
-    current_cfg->gen_asm_prologue(std::cout);
-
-    // Allocate space for local variables
-    int maxNegOffset = 0;
-    for (const auto &p : symbolTable)
-    {
-        if (p.second < maxNegOffset)
-            maxNegOffset = p.second;
-    }
-    int stackSize = -maxNegOffset;
-    if (stackSize > 0)
-    {
-        // Round up to 16 for alignment
-        int aligned = ((stackSize + 15) / 16) * 16;
-#ifdef ARM
-        std::cout << "\tsub sp, sp, #" << aligned << "\n";
-#else
-        std::cout << "\tsubq\t$" << aligned << ", %rsp\n";
-#endif
-    }
-    else
-    {
-#ifdef ARM
-        std::cout << "\tsub sp, sp, #16\n";
-#else
-        std::cout << "\tsubq\t$16, %rsp\n";
-#endif
-    }
-
-    // Generate code for all basic blocks
-    for (auto bb : current_cfg->get_bbs())
-    {
-        // Generate block label
-        std::cout << bb->get_name() << ":\n";
-
-        // Generate instructions
-        for (auto instr : bb->get_instrs())
-        {
-#ifdef ARM
-            instr->gen_asm_arm(std::cout);
-#else
-            instr->gen_asm_x86(std::cout);
-#endif
-        }
-    }
-
-    // Generate epilogue
-    current_cfg->gen_asm_epilogue(std::cout);
-
-#ifdef ARM
-    std::cout << "\t.size main, .-main\n";
-#else
-#ifndef __APPLE__
-    std::cout << "\t.size\tmain, .-main\n";
-    std::cout << "\t.section\t.note.GNU-stack,\"\",@progbits\n";
-#endif
-#endif
 
     return 0;
 }
@@ -377,6 +399,74 @@ antlrcpp::Any VisitorIR::visitParensExpr(ifccParser::ParensExprContext *ctx)
     return visit(ctx->expr());
 }
 
+antlrcpp::Any VisitorIR::visitCallExpr(ifccParser::CallExprContext *ctx)
+{
+    std::cerr << "DEBUG: visitCallExpr called for function " << ctx->VAR()->getText() << std::endl;
+
+    if (current_cfg == nullptr)
+    {
+        std::cerr << "Error: No current CFG in call expression" << std::endl;
+        return string("0");
+    }
+
+    string funcName = ctx->VAR()->getText();
+    string result = createTempVar(Type::INT_TYPE);
+
+    // Préparer les paramètres pour l'instruction call
+    vector<string> callParams = {funcName, result};
+
+    // Ajouter les arguments
+    if (ctx->arg_list())
+    {
+        antlrcpp::Any argListResult = visit(ctx->arg_list());
+        try
+        {
+            vector<string> args = any_cast<vector<string>>(argListResult);
+            callParams.insert(callParams.end(), args.begin(), args.end());
+        }
+        catch (const std::bad_any_cast &e)
+        {
+            std::cerr << "Error: Invalid argument list type" << std::endl;
+        }
+    }
+
+    std::cerr << "DEBUG: Adding call instruction with " << callParams.size() << " parameters" << std::endl;
+
+    // Ajouter l'instruction d'appel avec tous les paramètres
+    current_bb->add_IRInstr(IRInstr::Operation::call, Type::INT_TYPE, callParams);
+
+    return result;
+}
+
+antlrcpp::Any VisitorIR::visitParam_list(ifccParser::Param_listContext *ctx)
+{
+    std::vector<Param> params;
+
+    // Traiter tous les paramètres
+    for (size_t i = 0; i < ctx->VAR().size(); i++)
+    {
+        std::string paramName = ctx->VAR(i)->getText();
+        // Pour l'instant, tous les paramètres sont de type int
+        params.emplace_back(paramName, Type::INT_TYPE);
+    }
+
+    return params;
+}
+
+antlrcpp::Any VisitorIR::visitArg_list(ifccParser::Arg_listContext *ctx)
+{
+    std::vector<std::string> args;
+
+    // Traiter tous les arguments
+    for (auto expr : ctx->expr())
+    {
+        antlrcpp::Any argResult = visit(expr);
+        string argStr = any_cast<string>(argResult);
+        args.push_back(argStr);
+    }
+
+    return args;
+}
 // visitComparisonExpr
 antlrcpp::Any VisitorIR::visitComparisonExpr(ifccParser::ComparisonExprContext *ctx)
 {

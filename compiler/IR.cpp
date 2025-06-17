@@ -36,6 +36,123 @@ string IRInstr::IR_reg_to_asm(string reg)
 IRInstr::IRInstr(BasicBlock *bb_, Operation op, Type t, vector<string> params)
     : bb(bb_), op(op), t(t), params(params) {}
 
+void IRInstr::gen_asm_x86(ostream &o)
+{
+    switch (op)
+    {
+    case ldconst:
+        o << "\tmovl\t$" << params[1] << ", %eax\n";
+        o << "\tmovl\t%eax, " << IR_reg_to_asm(params[0]) << "\n";
+        break;
+    case add:
+        o << "\tmovl\t" << IR_reg_to_asm(params[1]) << ", %eax\n";
+        o << "\taddl\t" << IR_reg_to_asm(params[2]) << ", %eax\n";
+        o << "\tmovl\t%eax, " << IR_reg_to_asm(params[0]) << "\n";
+        break;
+    case sub:
+        o << "\tmovl\t" << IR_reg_to_asm(params[1]) << ", %eax\n";
+        o << "\tsubl\t" << IR_reg_to_asm(params[2]) << ", %eax\n";
+        o << "\tmovl\t%eax, " << IR_reg_to_asm(params[0]) << "\n";
+        break;
+    case mul:
+        o << "\tmovl\t" << IR_reg_to_asm(params[1]) << ", %eax\n";
+        o << "\timull\t" << IR_reg_to_asm(params[2]) << ", %eax\n";
+        o << "\tmovl\t%eax, " << IR_reg_to_asm(params[0]) << "\n";
+        break;
+    case div:
+        o << "\tmovl\t" << IR_reg_to_asm(params[1]) << ", %eax\n";
+        o << "\tcltd\n"; // Sign extend eax into edx
+        o << "\tidivl\t" << IR_reg_to_asm(params[2]) << "\n";
+        o << "\tmovl\t%eax, " << IR_reg_to_asm(params[0]) << "\n";
+        break;
+    case rmem:
+        if (params[1][0] == '%')
+        {
+            // Lire depuis un registre
+            o << "\tmovl\t" << params[1] << ", " << IR_reg_to_asm(params[0]) << "\n";
+        }
+        else
+        {
+            // Lire depuis la mémoire
+            o << "\tmovl\t" << IR_reg_to_asm(params[1]) << ", %eax\n";
+            o << "\tmovl\t%eax, " << IR_reg_to_asm(params[0]) << "\n";
+        }
+        break;
+    case wmem:
+        if (params[0] == params[1])
+        {
+            break;
+        }
+        if (params[1][0] == '%')
+        {
+            // Cas où le deuxième paramètre est un registre
+            o << "\tmovl\t" << params[1] << ", " << IR_reg_to_asm(params[0]) << "\n";
+        }
+        else
+        {
+            o << "\tmovl\t" << IR_reg_to_asm(params[1]) << ", %eax\n";
+            o << "\tmovl\t%eax, " << IR_reg_to_asm(params[0]) << "\n";
+        }
+        break;
+    case ret:
+        o << "\tmovl\t" << IR_reg_to_asm(params[0]) << ", %eax\n";
+        break;
+    case call:
+        // Sauvegarder les registres qui pourraient être modifiés
+        o << "\tpushq\t%rax\n";
+        o << "\tpushq\t%rcx\n";
+        o << "\tpushq\t%rdx\n";
+        o << "\tpushq\t%rsi\n";
+        o << "\tpushq\t%rdi\n";
+        o << "\tpushq\t%r8\n";
+        o << "\tpushq\t%r9\n";
+        o << "\tpushq\t%r10\n";
+        o << "\tpushq\t%r11\n";
+
+        // Passer les paramètres dans les registres (convention x86_64)
+        // params[0] = nom de la fonction, params[1] = variable de retour
+        // params[2..] = arguments
+        for (size_t i = 2; i < params.size(); i++)
+        {
+            if (i == 2)
+                o << "\tmovl\t" << IR_reg_to_asm(params[i]) << ", %edi\n";
+            else if (i == 3)
+                o << "\tmovl\t" << IR_reg_to_asm(params[i]) << ", %esi\n";
+            else if (i == 4)
+                o << "\tmovl\t" << IR_reg_to_asm(params[i]) << ", %edx\n";
+            else if (i == 5)
+                o << "\tmovl\t" << IR_reg_to_asm(params[i]) << ", %ecx\n";
+            else if (i == 6)
+                o << "\tmovl\t" << IR_reg_to_asm(params[i]) << ", %r8d\n";
+            else if (i == 7)
+                o << "\tmovl\t" << IR_reg_to_asm(params[i]) << ", %r9d\n";
+            else
+            {
+                // Pour plus de 6 paramètres, les empiler sur la pile
+                o << "\tpushq\t" << IR_reg_to_asm(params[i]) << "\n";
+            }
+        }
+
+        // Appeler la fonction
+        o << "\tcall\t" << params[0] << "\n";
+
+        // Stocker le résultat
+        o << "\tmovl\t%eax, " << IR_reg_to_asm(params[1]) << "\n";
+
+        // Restaurer les registres
+        o << "\tpopq\t%r11\n";
+        o << "\tpopq\t%r10\n";
+        o << "\tpopq\t%r9\n";
+        o << "\tpopq\t%r8\n";
+        o << "\tpopq\t%rdi\n";
+        o << "\tpopq\t%rsi\n";
+        o << "\tpopq\t%rdx\n";
+        o << "\tpopq\t%rcx\n";
+        o << "\tpopq\t%rax\n";
+        break;
+    }
+}
+
 void IRInstr::gen_asm_arm(ostream &o)
 {
     switch (op)
@@ -79,53 +196,6 @@ void IRInstr::gen_asm_arm(ostream &o)
         }
         o << "\tldr w0, [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
         o << "\tstr w0, [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
-        break;
-    case ret:
-        o << "\tldr w0, [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
-        break;
-    }
-}
-
-void IRInstr::gen_asm_x86(ostream &o)
-{
-    switch (op)
-    {
-    case ldconst:
-        o << "\tmovl\t$" << params[1] << ", %eax\n";
-        o << "\tmovl\t%eax, " << IR_reg_to_asm(params[0]) << "\n";
-        break;
-    case add:
-        o << "\tmovl\t" << IR_reg_to_asm(params[1]) << ", %eax\n";
-        o << "\taddl\t" << IR_reg_to_asm(params[2]) << ", %eax\n";
-        o << "\tmovl\t%eax, " << IR_reg_to_asm(params[0]) << "\n";
-        break;
-    case sub:
-        o << "\tmovl\t" << IR_reg_to_asm(params[1]) << ", %eax\n";
-        o << "\tsubl\t" << IR_reg_to_asm(params[2]) << ", %eax\n";
-        o << "\tmovl\t%eax, " << IR_reg_to_asm(params[0]) << "\n";
-        break;
-    case mul:
-        o << "\tmovl\t" << IR_reg_to_asm(params[1]) << ", %eax\n";
-        o << "\timull\t" << IR_reg_to_asm(params[2]) << ", %eax\n";
-        o << "\tmovl\t%eax, " << IR_reg_to_asm(params[0]) << "\n";
-        break;
-    case div:
-        o << "\tmovl\t" << IR_reg_to_asm(params[1]) << ", %eax\n";
-        o << "\tcltd\n"; // Sign extend eax into edx
-        o << "\tidivl\t" << IR_reg_to_asm(params[2]) << "\n";
-        o << "\tmovl\t%eax, " << IR_reg_to_asm(params[0]) << "\n";
-        break;
-    case rmem:
-        o << "\tmovl\t" << IR_reg_to_asm(params[1]) << ", %eax\n";
-        o << "\tmovl\t%eax, " << IR_reg_to_asm(params[0]) << "\n";
-        break;
-    case wmem:
-        if (params[0] == params[1])
-        {
-            break;
-        }
-        o << "\tmovl\t" << IR_reg_to_asm(params[1]) << ", %eax\n";
-        o << "\tmovl\t%eax, " << IR_reg_to_asm(params[0]) << "\n";
         break;
     case cmp_eq:
         o << "\tmovl\t" << IR_reg_to_asm(params[1]) << ", %eax\n";
@@ -175,8 +245,8 @@ void IRInstr::gen_asm_x86(ostream &o)
     }
 }
 
-// Implémentation de BasicBlock
-BasicBlock::BasicBlock(CFG *cfg, string entry_label)
+BasicBlock::BasicBlock(CFG *cfg, string
+                                     entry_label)
     : cfg(cfg), label(entry_label), exit_true(nullptr), exit_false(nullptr)
 {
     cfg->add_bb(this);
@@ -206,8 +276,8 @@ void BasicBlock::gen_asm_x86(ostream &o)
     // Gestion des branches
     if (exit_true == nullptr)
     {
-        // Fin de fonction
-        cfg->gen_asm_epilogue(o);
+        // Fin de fonction - ne pas générer l'épilogue ici
+        // L'épilogue sera généré séparément dans visitProg
     }
     else if (exit_false == nullptr)
     {
