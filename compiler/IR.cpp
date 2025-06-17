@@ -94,6 +94,48 @@ void IRInstr::gen_asm_x86(ostream &o)
             o << "\tmovl\t%eax, " << IR_reg_to_asm(params[0]) << "\n";
         }
         break;
+    case cmp_eq:
+        o << "\tmovl\t" << IR_reg_to_asm(params[1]) << ", %eax\n";
+        o << "\tcmpl\t" << IR_reg_to_asm(params[2]) << ", %eax\n";
+        o << "\tsete\t%al\n";
+        o << "\tmovzbl\t%al, %eax\n";
+        o << "\tmovl\t%eax, " << IR_reg_to_asm(params[0]) << "\n";
+        break;
+    case cmp_ne:
+        o << "\tmovl\t" << IR_reg_to_asm(params[1]) << ", %eax\n";
+        o << "\tcmpl\t" << IR_reg_to_asm(params[2]) << ", %eax\n";
+        o << "\tsetne\t%al\n";
+        o << "\tmovzbl\t%al, %eax\n";
+        o << "\tmovl\t%eax, " << IR_reg_to_asm(params[0]) << "\n";
+        break;
+    case cmp_lt:
+        o << "\tmovl\t" << IR_reg_to_asm(params[1]) << ", %eax\n";
+        o << "\tcmpl\t" << IR_reg_to_asm(params[2]) << ", %eax\n";
+        o << "\tsetl\t%al\n";
+        o << "\tmovzbl\t%al, %eax\n";
+        o << "\tmovl\t%eax, " << IR_reg_to_asm(params[0]) << "\n";
+        break;
+    case cmp_gt:
+        o << "\tmovl\t" << IR_reg_to_asm(params[1]) << ", %eax\n";
+        o << "\tcmpl\t" << IR_reg_to_asm(params[2]) << ", %eax\n";
+        o << "\tsetg\t%al\n";
+        o << "\tmovzbl\t%al, %eax\n";
+        o << "\tmovl\t%eax, " << IR_reg_to_asm(params[0]) << "\n";
+        break;
+    case cmp_le:
+        o << "\tmovl\t" << IR_reg_to_asm(params[1]) << ", %eax\n";
+        o << "\tcmpl\t" << IR_reg_to_asm(params[2]) << ", %eax\n";
+        o << "\tsetle\t%al\n";
+        o << "\tmovzbl\t%al, %eax\n";
+        o << "\tmovl\t%eax, " << IR_reg_to_asm(params[0]) << "\n";
+        break;
+    case cmp_ge:
+        o << "\tmovl\t" << IR_reg_to_asm(params[1]) << ", %eax\n";
+        o << "\tcmpl\t" << IR_reg_to_asm(params[2]) << ", %eax\n";
+        o << "\tsetge\t%al\n";
+        o << "\tmovzbl\t%al, %eax\n";
+        o << "\tmovl\t%eax, " << IR_reg_to_asm(params[0]) << "\n";
+        break;
     case ret:
         o << "\tmovl\t" << IR_reg_to_asm(params[0]) << ", %eax\n";
         break;
@@ -196,48 +238,6 @@ void IRInstr::gen_asm_arm(ostream &o)
         }
         o << "\tldr w0, [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
         o << "\tstr w0, [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
-        break;
-    case cmp_eq:
-        o << "\tmovl\t" << IR_reg_to_asm(params[1]) << ", %eax\n";
-        o << "\tcmpl\t" << IR_reg_to_asm(params[2]) << ", %eax\n";
-        o << "\tsete\t%al\n";
-        o << "\tmovzbl\t%al, %eax\n";
-        o << "\tmovl\t%eax, " << IR_reg_to_asm(params[0]) << "\n";
-        break;
-    case cmp_ne:
-        o << "\tmovl\t" << IR_reg_to_asm(params[1]) << ", %eax\n";
-        o << "\tcmpl\t" << IR_reg_to_asm(params[2]) << ", %eax\n";
-        o << "\tsetne\t%al\n";
-        o << "\tmovzbl\t%al, %eax\n";
-        o << "\tmovl\t%eax, " << IR_reg_to_asm(params[0]) << "\n";
-        break;
-    case cmp_lt:
-        o << "\tmovl\t" << IR_reg_to_asm(params[1]) << ", %eax\n";
-        o << "\tcmpl\t" << IR_reg_to_asm(params[2]) << ", %eax\n";
-        o << "\tsetl\t%al\n";
-        o << "\tmovzbl\t%al, %eax\n";
-        o << "\tmovl\t%eax, " << IR_reg_to_asm(params[0]) << "\n";
-        break;
-    case cmp_gt:
-        o << "\tmovl\t" << IR_reg_to_asm(params[1]) << ", %eax\n";
-        o << "\tcmpl\t" << IR_reg_to_asm(params[2]) << ", %eax\n";
-        o << "\tsetg\t%al\n";
-        o << "\tmovzbl\t%al, %eax\n";
-        o << "\tmovl\t%eax, " << IR_reg_to_asm(params[0]) << "\n";
-        break;
-    case cmp_le:
-        o << "\tmovl\t" << IR_reg_to_asm(params[1]) << ", %eax\n";
-        o << "\tcmpl\t" << IR_reg_to_asm(params[2]) << ", %eax\n";
-        o << "\tsetle\t%al\n";
-        o << "\tmovzbl\t%al, %eax\n";
-        o << "\tmovl\t%eax, " << IR_reg_to_asm(params[0]) << "\n";
-        break;
-    case cmp_ge:
-        o << "\tmovl\t" << IR_reg_to_asm(params[1]) << ", %eax\n";
-        o << "\tcmpl\t" << IR_reg_to_asm(params[2]) << ", %eax\n";
-        o << "\tsetge\t%al\n";
-        o << "\tmovzbl\t%al, %eax\n";
-        o << "\tmovl\t%eax, " << IR_reg_to_asm(params[0]) << "\n";
         break;
     case ret:
         o << "\tmovl\t" << IR_reg_to_asm(params[0]) << ", %eax\n";

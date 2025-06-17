@@ -55,11 +55,24 @@ antlrcpp::Any VisitorIR::visitProg(ifccParser::ProgContext *ctx)
         std::string funcName = pair.first;
         CFG *cfg = pair.second;
 
-        // Déclarer la fonction comme globale
+// Déclarer la fonction comme globale
+#ifdef __APPLE__
+        // Pour macOS, main doit s'appeler _main
+        if (funcName == "main")
+        {
+            std::cout << "\t.globl\t_main\n";
+            std::cout << "_main:\n";
+        }
+        else
+        {
+            std::cout << "\t.globl\t" << funcName << "\n";
+            std::cout << funcName << ":\n";
+        }
+#else
+        // Pour Linux, main reste main
         std::cout << "\t.globl\t" << funcName << "\n";
-
-        // Ajouter le label de la fonction
         std::cout << funcName << ":\n";
+#endif
 
         // Générer le prologue de la fonction
         cfg->gen_asm_prologue(std::cout);
