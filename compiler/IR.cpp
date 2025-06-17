@@ -44,6 +44,12 @@ void IRInstr::gen_asm_x86(ostream &o) {
             o << "\timull\t" << IR_reg_to_asm(params[2]) << ", %eax\n";
             o << "\tmovl\t%eax, " << IR_reg_to_asm(params[0]) << "\n";
             break;
+        case div:
+            o << "\tmovl\t" << IR_reg_to_asm(params[1]) << ", %eax\n";
+            o << "\tcltd\n";  // Sign extend eax into edx
+            o << "\tidivl\t" << IR_reg_to_asm(params[2]) << "\n";
+            o << "\tmovl\t%eax, " << IR_reg_to_asm(params[0]) << "\n";
+            break;
         case rmem:
             o << "\tmovl\t" << IR_reg_to_asm(params[1]) << ", %eax\n";
             o << "\tmovl\t%eax, " << IR_reg_to_asm(params[0]) << "\n";
