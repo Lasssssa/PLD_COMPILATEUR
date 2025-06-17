@@ -161,8 +161,10 @@ antlrcpp::Any VisitorIR::visitVarExpr(ifccParser::VarExprContext *ctx) {
 
     string varName = ctx->VAR()->getText();
     int varIndex = current_cfg->get_var_index(varName);
+    
+    // Si c'est dans le contexte d'une assignation, on peut retourner directement l'adresse
+    // Sinon, on lit la valeur
     string result = createTempVar(Type::INT_TYPE);
-
     current_bb->add_IRInstr(IRInstr::Operation::rmem, Type::INT_TYPE, {result, "!" + to_string(varIndex)});
     return result;
 }
@@ -199,7 +201,7 @@ antlrcpp::Any VisitorIR::visitAssignExpr(ifccParser::AssignExprContext *ctx) {
         return rightStr;
     } else {
         // Cas d'assignation chaînée : (expr = expr) = expr
-        // On doit d'abord évaluer l'assignation de gauche pour obtenir la variable cible
+        // On doit d'abord évaluer l'assignation de gauche
         antlrcpp::Any leftResult = visit(ctx->expr(0));
         string leftStr = any_cast<string>(leftResult);
         
