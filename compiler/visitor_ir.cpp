@@ -80,33 +80,6 @@ antlrcpp::Any VisitorIR::visitProg(ifccParser::ProgContext *ctx)
     // Generate prologue
     current_cfg->gen_asm_prologue(std::cout);
 
-    // Allocate space for local variables
-    int maxNegOffset = 0;
-    for (const auto &p : symbolTable)
-    {
-        if (p.second < maxNegOffset)
-            maxNegOffset = p.second;
-    }
-    int stackSize = -maxNegOffset;
-    if (stackSize > 0)
-    {
-        // Round up to 16 for alignment
-        int aligned = ((stackSize + 15) / 16) * 16;
-#ifdef ARM
-        std::cout << "\tsub sp, sp, #" << aligned << "\n";
-#else
-        std::cout << "\tsubq\t$" << aligned << ", %rsp\n";
-#endif
-    }
-    else
-    {
-#ifdef ARM
-        std::cout << "\tsub sp, sp, #16\n";
-#else
-        std::cout << "\tsubq\t$16, %rsp\n";
-#endif
-    }
-
     // Generate code for all basic blocks
     for (auto bb : current_cfg->get_bbs())
     {
