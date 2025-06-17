@@ -156,12 +156,12 @@ antlrcpp::Any VisitorIR::visitDecl_stmt(ifccParser::Decl_stmtContext *ctx) {
 antlrcpp::Any VisitorIR::visitVarExpr(ifccParser::VarExprContext *ctx) {
     if (current_cfg == nullptr) {
         std::cerr << "Error: No current CFG in variable expression" << std::endl;
-        return string("0");  // Retourner une valeur par défaut
+        return string("0");
     }
 
     string varName = ctx->VAR()->getText();
     int varIndex = current_cfg->get_var_index(varName);
-    string result = "!" + to_string(nextFreeSymbolIndex++);
+    string result = createTempVar(Type::INT_TYPE);
 
     current_bb->add_IRInstr(IRInstr::Operation::rmem, Type::INT_TYPE, {result, "!" + to_string(varIndex)});
     return result;
@@ -170,11 +170,11 @@ antlrcpp::Any VisitorIR::visitVarExpr(ifccParser::VarExprContext *ctx) {
 antlrcpp::Any VisitorIR::visitConstExpr(ifccParser::ConstExprContext *ctx) {
     if (current_cfg == nullptr) {
         std::cerr << "Error: No current CFG in constant expression" << std::endl;
-        return string("0");  // Retourner une valeur par défaut
+        return string("0");
     }
 
     string value = ctx->CONST()->getText();
-    string result = "!" + to_string(nextFreeSymbolIndex++);
+    string result = createTempVar(Type::INT_TYPE);
 
     current_bb->add_IRInstr(IRInstr::Operation::ldconst, Type::INT_TYPE, {result, value});
     return result;
@@ -183,41 +183,55 @@ antlrcpp::Any VisitorIR::visitConstExpr(ifccParser::ConstExprContext *ctx) {
 antlrcpp::Any VisitorIR::visitAssignExpr(ifccParser::AssignExprContext *ctx) {
     if (current_cfg == nullptr) {
         std::cerr << "Error: No current CFG in assignment expression" << std::endl;
-        return string("0");  // Retourner une valeur par défaut
+        return string("0");
     }
 
-    string varName = ctx->expr(0)->getText();
-    int varIndex = current_cfg->get_var_index(varName);
+    // Évaluer d'abord l'expression de droite
+    antlrcpp::Any rightResult = visit(ctx->expr(1));
+    string rightStr = any_cast<string>(rightResult);
 
-    antlrcpp::Any result = visit(ctx->expr(1));
-    try {
-        string resultStr = any_cast<string>(result);
-        current_bb->add_IRInstr(IRInstr::Operation::wmem, Type::INT_TYPE, {"!" + to_string(varIndex), resultStr});
-        return resultStr;
-    } catch (const std::bad_any_cast &e) {
-        std::cerr << "Error: Invalid expression type in assignment" << std::endl;
-        return string("0");
+    // Gérer le côté gauche
+    if (auto varExpr = dynamic_cast<ifccParser::VarExprContext *>(ctx->expr(0))) {
+        // Cas simple : variable = expression
+        string varName = varExpr->VAR()->getText();
+        int varIndex = current_cfg->get_var_index(varName);
+        current_bb->add_IRInstr(IRInstr::Operation::wmem, Type::INT_TYPE, {"!" + to_string(varIndex), rightStr});
+        return rightStr;
+    } else {
+        // Cas d'assignation chaînée : (expr = expr) = expr
+        // On doit d'abord évaluer l'assignation de gauche pour obtenir la variable cible
+        antlrcpp::Any leftResult = visit(ctx->expr(0));
+        string leftStr = any_cast<string>(leftResult);
+        
+        // Pour l'assignation chaînée, on retourne simplement la valeur de droite
+        // car l'assignation de gauche a déjà été traitée et a retourné cette valeur
+        return rightStr;
     }
 }
 
 antlrcpp::Any VisitorIR::visitAdditiveExpr(ifccParser::AdditiveExprContext *ctx) {
     if (current_cfg == nullptr) {
         std::cerr << "Error: No current CFG in additive expression" << std::endl;
-        return string("0");  // Retourner une valeur par défaut
+        return string("0");
     }
 
-    string result = "!" + to_string(nextFreeSymbolIndex++);
+    string result = createTempVar(Type::INT_TYPE);
     antlrcpp::Any leftResult = visit(ctx->expr(0));
     antlrcpp::Any rightResult = visit(ctx->expr(1));
 
-    string leftStr = any_cast<string>(leftResult);
-    string rightStr = any_cast<string>(rightResult);
+    try {
+        string leftStr = any_cast<string>(leftResult);
+        string rightStr = any_cast<string>(rightResult);
 
-    string op = ctx->children[1]->getText();
-    IRInstr::Operation operation = (op == "+") ? IRInstr::Operation::add : IRInstr::Operation::sub;
+        string op = ctx->children[1]->getText();
+        IRInstr::Operation operation = (op == "+") ? IRInstr::Operation::add : IRInstr::Operation::sub;
 
-    current_bb->add_IRInstr(operation, Type::INT_TYPE, {result, leftStr, rightStr});
-    return result;
+        current_bb->add_IRInstr(operation, Type::INT_TYPE, {result, leftStr, rightStr});
+        return result;
+    } catch (const std::bad_any_cast &e) {
+        std::cerr << "Error: Invalid type in additive expression" << std::endl;
+        return string("0");
+    }
 }
 
 antlrcpp::Any VisitorIR::visitMultiplicativeExpr(ifccParser::MultiplicativeExprContext *ctx) {
@@ -226,7 +240,7 @@ antlrcpp::Any VisitorIR::visitMultiplicativeExpr(ifccParser::MultiplicativeExprC
         return string("0");
     }
 
-    string result = "!" + to_string(nextFreeSymbolIndex++);
+    string result = createTempVar(Type::INT_TYPE);
     antlrcpp::Any leftResult = visit(ctx->expr(0));
     antlrcpp::Any rightResult = visit(ctx->expr(1));
 
@@ -246,19 +260,27 @@ antlrcpp::Any VisitorIR::visitMultiplicativeExpr(ifccParser::MultiplicativeExprC
 }
 
 antlrcpp::Any VisitorIR::visitUnaryExpr(ifccParser::UnaryExprContext *ctx) {
-    // Visiter l'opérande
-    visit(ctx->expr());
-    std::string operandVar = createTempVar(Type::INT_TYPE);
+    if (current_cfg == nullptr) {
+        std::cerr << "Error: No current CFG in unary expression" << std::endl;
+        return string("0");
+    }
 
-    // Créer une variable temporaire pour le résultat
-    std::string resultVar = createTempVar(Type::INT_TYPE);
+    antlrcpp::Any operandResult = visit(ctx->expr());
+    string operandVar = any_cast<string>(operandResult);
+    string resultVar = createTempVar(Type::INT_TYPE);
 
-    // Pour un moins unaire, on multiplie par -1
-    std::string constVar = createTempVar(Type::INT_TYPE);
-    addInstr(IRInstr::ldconst, Type::INT_TYPE, {constVar, "-1"});
-    addInstr(IRInstr::mul, Type::INT_TYPE, {resultVar, operandVar, constVar});
+    string op = ctx->children[0]->getText();
+    if (op == "-") {
+        // Pour un moins unaire, on multiplie par -1
+        string constVar = createTempVar(Type::INT_TYPE);
+        current_bb->add_IRInstr(IRInstr::Operation::ldconst, Type::INT_TYPE, {constVar, "-1"});
+        current_bb->add_IRInstr(IRInstr::Operation::mul, Type::INT_TYPE, {resultVar, operandVar, constVar});
+    } else {
+        // Pour un plus unaire, on copie simplement la valeur
+        current_bb->add_IRInstr(IRInstr::Operation::rmem, Type::INT_TYPE, {resultVar, operandVar});
+    }
 
-    return 0;
+    return resultVar;
 }
 
 antlrcpp::Any VisitorIR::visitParensExpr(ifccParser::ParensExprContext *ctx) {

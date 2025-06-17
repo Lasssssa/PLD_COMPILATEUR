@@ -3,6 +3,9 @@
 
 using std::endl;
 using std::to_string;
+using std::string;
+using std::vector;
+using std::ostream;
 
 string IR_reg_to_asm(string reg) {
     if (reg[0] == '%') {
@@ -13,7 +16,7 @@ string IR_reg_to_asm(string reg) {
     if (reg[0] == '!') {
         int offset = stoi(reg.substr(1));
         // Les variables locales sont stockées à des offsets négatifs par rapport à %rbp
-        return to_string(-8 * offset) + "(%rbp)";
+        return to_string(-4 * offset) + "(%rbp)";
     }
     // Pour les autres cas, retourner le registre tel quel
     return reg;

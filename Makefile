@@ -75,3 +75,4 @@ test:
 clean:
 	rm -rf compiler/build compiler/generated
 	rm -f compiler/ifcc
+	rm -rf ifcc-test-output

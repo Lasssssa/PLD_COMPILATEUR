@@ -87,10 +87,10 @@ antlrcpp::Any SymbolTableVisitor::visitAssignExpr(ifccParser::AssignExprContext 
     std::cerr << "Évaluation du côté droit de l'affectation..." << std::endl;
     this->visit(ctx->expr(1));
 
-    // Le côté gauche doit être une variable, mais on ne la marque PAS comme utilisée
-    // car c'est une assignation, pas une utilisation
+    // Gérer le côté gauche
     if (auto varExpr = dynamic_cast<ifccParser::VarExprContext *>(ctx->expr(0)))
     {
+        // Cas simple : variable = expression
         std::string varName = varExpr->VAR()->getText();
 
         // Vérifier que la variable est déclarée
@@ -105,9 +105,15 @@ antlrcpp::Any SymbolTableVisitor::visitAssignExpr(ifccParser::AssignExprContext 
             // NOTE: On ne marque PAS la variable comme utilisée ici, c'est une assignation
         }
     }
+    else if (auto assignExpr = dynamic_cast<ifccParser::AssignExprContext *>(ctx->expr(0)))
+    {
+        // Cas d'assignation chaînée : (expr = expr) = expr
+        std::cerr << "Traitement d'une assignation chaînée..." << std::endl;
+        this->visit(assignExpr);
+    }
     else
     {
-        std::cerr << "ERREUR: Le côté gauche d'une affectation doit être une variable!" << std::endl;
+        std::cerr << "ERREUR: Le côté gauche d'une affectation doit être une variable ou une autre assignation!" << std::endl;
         hasErrors = true;
     }
 
