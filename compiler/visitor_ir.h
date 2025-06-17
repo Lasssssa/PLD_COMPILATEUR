@@ -10,18 +10,20 @@
 #include <vector>
 
 // Structure pour représenter un paramètre de fonction
-struct Param {
+struct Param
+{
     std::string name;
     Type type;
-    
-    Param(const std::string& n, Type t) : name(n), type(t) {}
+
+    Param(const std::string &n, Type t) : name(n), type(t) {}
 };
 
-class VisitorIR : public ifccBaseVisitor {
+class VisitorIR : public ifccBaseVisitor
+{
 private:
-    map<string, CFG*> cfgs;
-    CFG* current_cfg;
-    BasicBlock* current_bb;
+    map<string, CFG *> cfgs;
+    CFG *current_cfg;
+    BasicBlock *current_bb;
     int nextFreeSymbolIndex;
     map<string, int> symbolTable;
     int nextBBnumber;
@@ -29,22 +31,23 @@ private:
 
     // Méthodes utilitaires
     std::string createTempVar(Type t);
-    void addInstr(IRInstr::Operation op, Type t, const std::vector<std::string>& params);
-    BasicBlock* createNewBB();
-    void setCurrentBB(BasicBlock* bb);
+    void addInstr(IRInstr::Operation op, Type t, const std::vector<std::string> &params);
+    BasicBlock *createNewBB();
+    void setCurrentBB(BasicBlock *bb);
 
 public:
     // Constructeur par défaut
     VisitorIR() : current_cfg(nullptr), current_bb(nullptr), nextFreeSymbolIndex(0), nextBBnumber(0) {}
-    
+
     // Constructeur avec paramètre
-    VisitorIR(const map<string, int>& symbols) 
+    VisitorIR(const map<string, int> &symbols)
         : current_cfg(nullptr), current_bb(nullptr), nextFreeSymbolIndex(0), nextBBnumber(0), symbolTable(symbols) {}
-    
+
     ~VisitorIR();
 
     // Méthode pour récupérer le CFG d'une fonction
-    CFG* getCFG(const std::string& functionName) const {
+    CFG *getCFG(const std::string &functionName) const
+    {
         auto it = cfgs.find(functionName);
         return (it != cfgs.end()) ? it->second : nullptr;
     }
@@ -61,6 +64,7 @@ public:
     virtual antlrcpp::Any visitMultiplicativeExpr(ifccParser::MultiplicativeExprContext *ctx) override;
     virtual antlrcpp::Any visitUnaryExpr(ifccParser::UnaryExprContext *ctx) override;
     virtual antlrcpp::Any visitParensExpr(ifccParser::ParensExprContext *ctx) override;
+    virtual antlrcpp::Any visitComparisonExpr(ifccParser::ComparisonExprContext *ctx) override;
 };
 
-#endif 
+#endif

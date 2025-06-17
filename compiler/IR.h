@@ -39,8 +39,11 @@ public:
         wmem,
         call,
         cmp_eq,
+        cmp_ne,
         cmp_lt,
+        cmp_gt,
         cmp_le,
+        cmp_ge,
         ret
     };
 

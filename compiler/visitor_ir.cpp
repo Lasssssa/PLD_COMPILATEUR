@@ -45,7 +45,7 @@ antlrcpp::Any VisitorIR::visitProg(ifccParser::ProgContext *ctx)
     current_cfg = new CFG(main);
 
     cfgs["main"] = current_cfg;
-    
+
     currentFunctionName = "main";
 
     current_bb = new BasicBlock(current_cfg, "BB_0");
@@ -375,4 +375,36 @@ antlrcpp::Any VisitorIR::visitUnaryExpr(ifccParser::UnaryExprContext *ctx)
 antlrcpp::Any VisitorIR::visitParensExpr(ifccParser::ParensExprContext *ctx)
 {
     return visit(ctx->expr());
+}
+
+// visitComparisonExpr
+antlrcpp::Any VisitorIR::visitComparisonExpr(ifccParser::ComparisonExprContext *ctx)
+{
+    antlrcpp::Any leftResult = visit(ctx->expr(0));
+    antlrcpp::Any rightResult = visit(ctx->expr(1));
+
+    string leftStr = any_cast<string>(leftResult);
+    string rightStr = any_cast<string>(rightResult);
+
+    string op = ctx->children[1]->getText();
+
+    IRInstr::Operation operation;
+    if (op == "==")
+        operation = IRInstr::Operation::cmp_eq;
+    else if (op == "!=")
+        operation = IRInstr::Operation::cmp_ne;
+    else if (op == "<")
+        operation = IRInstr::Operation::cmp_lt;
+    else if (op == ">")
+        operation = IRInstr::Operation::cmp_gt;
+    else if (op == "<=")
+        operation = IRInstr::Operation::cmp_le;
+    else if (op == ">=")
+        operation = IRInstr::Operation::cmp_ge;
+    else
+        throw std::runtime_error("Opérateur de comparaison inconnu");
+
+    string result = createTempVar(Type::INT_TYPE);
+    current_bb->add_IRInstr(operation, Type::INT_TYPE, {result, leftStr, rightStr});
+    return result;
 }

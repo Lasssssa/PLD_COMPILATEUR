@@ -22,7 +22,7 @@ string IRInstr::IR_reg_to_asm(string reg)
 #ifdef ARM
         // Local variables are stored at positive offsets from sp
         // Ensure 4-byte alignment for 32-bit integers
-        return to_string(4 * (offset + 1));  // +1 to account for return value
+        return to_string(4 * (offset + 1)); // +1 to account for return value
 #else
         // Local variables are stored at negative offsets from %rbp
         return to_string(-4 * (offset + 1)) + "(%rbp)";
@@ -127,6 +127,48 @@ void IRInstr::gen_asm_x86(ostream &o)
         o << "\tmovl\t" << IR_reg_to_asm(params[1]) << ", %eax\n";
         o << "\tmovl\t%eax, " << IR_reg_to_asm(params[0]) << "\n";
         break;
+    case cmp_eq:
+        o << "\tmovl\t" << IR_reg_to_asm(params[1]) << ", %eax\n";
+        o << "\tcmpl\t" << IR_reg_to_asm(params[2]) << ", %eax\n";
+        o << "\tsete\t%al\n";
+        o << "\tmovzbl\t%al, %eax\n";
+        o << "\tmovl\t%eax, " << IR_reg_to_asm(params[0]) << "\n";
+        break;
+    case cmp_ne:
+        o << "\tmovl\t" << IR_reg_to_asm(params[1]) << ", %eax\n";
+        o << "\tcmpl\t" << IR_reg_to_asm(params[2]) << ", %eax\n";
+        o << "\tsetne\t%al\n";
+        o << "\tmovzbl\t%al, %eax\n";
+        o << "\tmovl\t%eax, " << IR_reg_to_asm(params[0]) << "\n";
+        break;
+    case cmp_lt:
+        o << "\tmovl\t" << IR_reg_to_asm(params[1]) << ", %eax\n";
+        o << "\tcmpl\t" << IR_reg_to_asm(params[2]) << ", %eax\n";
+        o << "\tsetl\t%al\n";
+        o << "\tmovzbl\t%al, %eax\n";
+        o << "\tmovl\t%eax, " << IR_reg_to_asm(params[0]) << "\n";
+        break;
+    case cmp_gt:
+        o << "\tmovl\t" << IR_reg_to_asm(params[1]) << ", %eax\n";
+        o << "\tcmpl\t" << IR_reg_to_asm(params[2]) << ", %eax\n";
+        o << "\tsetg\t%al\n";
+        o << "\tmovzbl\t%al, %eax\n";
+        o << "\tmovl\t%eax, " << IR_reg_to_asm(params[0]) << "\n";
+        break;
+    case cmp_le:
+        o << "\tmovl\t" << IR_reg_to_asm(params[1]) << ", %eax\n";
+        o << "\tcmpl\t" << IR_reg_to_asm(params[2]) << ", %eax\n";
+        o << "\tsetle\t%al\n";
+        o << "\tmovzbl\t%al, %eax\n";
+        o << "\tmovl\t%eax, " << IR_reg_to_asm(params[0]) << "\n";
+        break;
+    case cmp_ge:
+        o << "\tmovl\t" << IR_reg_to_asm(params[1]) << ", %eax\n";
+        o << "\tcmpl\t" << IR_reg_to_asm(params[2]) << ", %eax\n";
+        o << "\tsetge\t%al\n";
+        o << "\tmovzbl\t%al, %eax\n";
+        o << "\tmovl\t%eax, " << IR_reg_to_asm(params[0]) << "\n";
+        break;
     case ret:
         o << "\tmovl\t" << IR_reg_to_asm(params[0]) << ", %eax\n";
         break;
@@ -205,11 +247,11 @@ void CFG::gen_asm_x86(ostream &o)
 static void gen_asm_arm_prologue(ostream &o, int nextFreeSymbolIndex)
 {
     // Calculate total stack size needed (including alignment)
-    int totalSize = 16 + (nextFreeSymbolIndex * 4);  // 16 for frame + variables
+    int totalSize = 16 + (nextFreeSymbolIndex * 4); // 16 for frame + variables
     // Round up to 16-byte alignment
     totalSize = ((totalSize + 15) & ~15);
-    
-    o << "\tsub sp, sp, #" << totalSize << "\n";  // Allocate all stack space at once
+
+    o << "\tsub sp, sp, #" << totalSize << "\n"; // Allocate all stack space at once
 }
 
 static void gen_asm_x86_prologue(ostream &o, int nextFreeSymbolIndex)
@@ -232,11 +274,11 @@ void CFG::gen_asm_epilogue(ostream &o)
 {
 #ifdef ARM
     // Calculate total stack size needed (including alignment)
-    int totalSize = 16 + (nextFreeSymbolIndex * 4);  // 16 for frame + variables
+    int totalSize = 16 + (nextFreeSymbolIndex * 4); // 16 for frame + variables
     // Round up to 16-byte alignment
     totalSize = ((totalSize + 15) & ~15);
-    
-    o << "\tadd sp, sp, #" << totalSize << "\n";  // Restore all stack space at once
+
+    o << "\tadd sp, sp, #" << totalSize << "\n"; // Restore all stack space at once
     o << "\tret\n";
 #else
     o << "\tleave" << endl;
