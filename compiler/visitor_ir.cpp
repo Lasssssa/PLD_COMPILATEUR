@@ -6,163 +6,171 @@
 using std::to_string;
 using namespace std;
 
-VisitorIR::~VisitorIR()
-{
-    for (auto &pair : cfgs)
-    {
+VisitorIR::~VisitorIR() {
+    for (auto &pair: cfgs) {
         delete pair.second;
     }
 }
 
-string VisitorIR::createTempVar(Type t)
-{
+string VisitorIR::createTempVar(Type t) {
     return current_cfg->create_new_tempvar(t);
 }
 
-void VisitorIR::addInstr(IRInstr::Operation op, Type t, const vector<string> &params)
-{
+void VisitorIR::addInstr(IRInstr::Operation op, Type t, const vector <string> &params) {
     current_bb->add_IRInstr(op, t, params);
 }
 
-BasicBlock *VisitorIR::createNewBB()
-{
+BasicBlock *VisitorIR::createNewBB() {
     string bbName = "BB_" + to_string(nextBBnumber++);
     BasicBlock *bb = new BasicBlock(current_cfg, bbName);
     current_cfg->add_bb(bb);
     return bb;
 }
 
-void VisitorIR::setCurrentBB(BasicBlock *bb)
-{
+void VisitorIR::setCurrentBB(BasicBlock *bb) {
     current_bb = bb;
     current_cfg->current_bb = bb;
 }
 
-antlrcpp::Any VisitorIR::visitProg(ifccParser::ProgContext *ctx)
-{
-    // Create the main function
-    DefFonction *main = new DefFonction("main", Type::INT_TYPE, {});
-    current_cfg = new CFG(main);
-
-    cfgs["main"] = current_cfg;
-    
-    currentFunctionName = "main";
-
-    current_bb = new BasicBlock(current_cfg, "BB_0");
-
-    // Visit all statements
-    for (auto stmt : ctx->stmt())
-    {
-        visit(stmt);
-    }
-
-#ifdef ARM
-    // ARM assembly output
-    std::cout << "\t.arch armv8-a\n";
+antlrcpp::Any VisitorIR::visitProg(ifccParser::ProgContext *ctx) {
+    // Générer le prologue global
     std::cout << "\t.text\n";
-    std::cout << "\t.align 2\n";
-    std::cout << "\t.global main\n";
-    std::cout << "\t.type main, %function\n";
-    std::cout << "main:\n";
-#else
-    // x86 assembly output
-#ifdef __APPLE__
-    std::cout << ".globl _main\n";
-    std::cout << "_main:\n";
-#else
-    std::cout << "\t.section\t.text\n";
-    std::cout << ".globl main\n";
-    std::cout << "main:\n";
-    std::cout << "\t.type\tmain, @function\n";
-#endif
-#endif
 
-    // Generate prologue
-    current_cfg->gen_asm_prologue(std::cout);
-
-    // Generate code for all basic blocks
-    for (auto bb : current_cfg->get_bbs())
-    {
-        // Generate block label
-        std::cout << bb->get_name() << ":\n";
-
-        // Generate instructions
-        for (auto instr : bb->get_instrs())
-        {
-#ifdef ARM
-            instr->gen_asm_arm(std::cout);
-#else
-            instr->gen_asm_x86(std::cout);
-#endif
-        }
+    // Visiter toutes les fonctions pour construire les CFG
+    for (auto func : ctx->function()) {
+        this->visit(func);
     }
 
-    // Generate epilogue
-    current_cfg->gen_asm_epilogue(std::cout);
-
+    // Générer le code assembleur pour toutes les fonctions
+    for (const auto& pair : cfgs) {
+        std::string funcName = pair.first;
+        CFG* cfg = pair.second;
+        
+        // Déclarer la fonction comme globale
+        std::cout << "\t.globl\t" << funcName << "\n";
+        
+        // Ajouter le label de la fonction
+        std::cout << funcName << ":\n";
+        
+        // Générer le prologue de la fonction
+        cfg->gen_asm_prologue(std::cout);
+        
+        // Générer le code de tous les blocs de base
+        for (auto bb : cfg->get_bbs()) {
+            bb->gen_asm_x86(std::cout);
+        }
+        
+        // Générer l'épilogue de la fonction
+        cfg->gen_asm_epilogue(std::cout);
+        
+        // Ajouter les directives de taille pour la fonction
 #ifdef ARM
-    std::cout << "\t.size main, .-main\n";
+        std::cout << "\t.size " << funcName << ", .-" << funcName << "\n";
 #else
 #ifndef __APPLE__
-    std::cout << "\t.size\tmain, .-main\n";
-    std::cout << "\t.section\t.note.GNU-stack,\"\",@progbits\n";
+        std::cout << "\t.size\t" << funcName << ", .-" << funcName << "\n";
 #endif
+#endif
+    }
+
+#ifndef __APPLE__
+    std::cout << "\t.section\t.note.GNU-stack,\"\",@progbits\n";
 #endif
 
     return 0;
 }
 
-antlrcpp::Any VisitorIR::visitReturn_stmt(ifccParser::Return_stmtContext *ctx)
-{
-    if (current_cfg == nullptr)
-    {
+antlrcpp::Any VisitorIR::visitFunction(ifccParser::FunctionContext *ctx) {
+    std::string funcName = ctx->VAR()->getText();
+
+    // Créer la fonction
+    std::vector <Param> params;
+    if (ctx->param_list()) {
+        // Traiter les paramètres
+        antlrcpp::Any paramResult = visit(ctx->param_list());
+        try {
+            params = any_cast < std::vector < Param >> (paramResult);
+        } catch (const std::bad_any_cast &e) {
+            std::cerr << "Error: Invalid parameter list type" << std::endl;
+        }
+    }
+
+    DefFonction *func = new DefFonction(funcName, Type::INT_TYPE, params);
+    current_cfg = new CFG(func);
+    cfgs[funcName] = current_cfg;
+    currentFunctionName = funcName;
+
+    // Créer le bloc de base (il sera automatiquement ajouté au CFG)
+    current_bb = new BasicBlock(current_cfg, funcName + "_BB_" + to_string(nextBBnumber++));
+
+    // Ajouter les paramètres à la table des symboles et les récupérer depuis les registres
+    for (size_t i = 0; i < params.size(); i++) {
+        current_cfg->add_to_symbol_table(params[i].name, params[i].type);
+        string paramVar = "!" + to_string(current_cfg->get_var_index(params[i].name));
+
+        // Récupérer les paramètres depuis les registres selon la convention x86_64
+        if (i == 0) {
+            current_bb->add_IRInstr(IRInstr::Operation::wmem, Type::INT_TYPE, {paramVar, "%edi"});
+        } else if (i == 1) {
+            current_bb->add_IRInstr(IRInstr::Operation::wmem, Type::INT_TYPE, {paramVar, "%esi"});
+        } else if (i == 2) {
+            current_bb->add_IRInstr(IRInstr::Operation::wmem, Type::INT_TYPE, {paramVar, "%edx"});
+        } else if (i == 3) {
+            current_bb->add_IRInstr(IRInstr::Operation::wmem, Type::INT_TYPE, {paramVar, "%ecx"});
+        } else if (i == 4) {
+            current_bb->add_IRInstr(IRInstr::Operation::wmem, Type::INT_TYPE, {paramVar, "%r8d"});
+        } else if (i == 5) {
+            current_bb->add_IRInstr(IRInstr::Operation::wmem, Type::INT_TYPE, {paramVar, "%r9d"});
+        }
+        // Pour plus de 6 paramètres, ils seraient sur la pile
+    }
+
+    // Visiter les instructions de la fonction
+    for (auto stmt: ctx->stmt()) {
+        visit(stmt);
+    }
+
+    return 0;
+}
+
+antlrcpp::Any VisitorIR::visitReturn_stmt(ifccParser::Return_stmtContext *ctx) {
+    if (current_cfg == nullptr) {
         std::cerr << "Error: No current CFG in return statement" << std::endl;
         return 0;
     }
 
-    if (ctx->expr())
-    {
+    if (ctx->expr()) {
         antlrcpp::Any result = visit(ctx->expr());
-        try
-        {
+        try {
             string resultStr = any_cast<string>(result);
 
             // Si le résultat est déjà dans une variable temporaire, l'utiliser directement
-            if (resultStr[0] == '!')
-            {
+            if (resultStr[0] == '!') {
                 // Le résultat est déjà dans une variable temporaire, l'utiliser directement
                 current_bb->add_IRInstr(IRInstr::Operation::ret, Type::INT_TYPE, {resultStr});
-            }
-            else
-            {
+            } else {
                 // Copier dans la variable de retour
                 current_bb->add_IRInstr(IRInstr::Operation::wmem, Type::INT_TYPE, {"!0", resultStr});
                 current_bb->add_IRInstr(IRInstr::Operation::ret, Type::INT_TYPE, {"!0"});
             }
         }
-        catch (const std::bad_any_cast &e)
-        {
+        catch (const std::bad_any_cast &e) {
             std::cerr << "Error: Invalid return value type" << std::endl;
             return 0;
         }
-    }
-    else
-    {
+    } else {
         current_bb->add_IRInstr(IRInstr::Operation::ret, Type::INT_TYPE, {"!0"});
     }
 
     return 0;
 }
 
-antlrcpp::Any VisitorIR::visitExpr_stmt(ifccParser::Expr_stmtContext *ctx)
-{
+antlrcpp::Any VisitorIR::visitExpr_stmt(ifccParser::Expr_stmtContext *ctx) {
     return visit(ctx->expr());
 }
 
-antlrcpp::Any VisitorIR::visitDecl_stmt(ifccParser::Decl_stmtContext *ctx)
-{
-    if (current_cfg == nullptr)
-    {
+antlrcpp::Any VisitorIR::visitDecl_stmt(ifccParser::Decl_stmtContext *ctx) {
+    if (current_cfg == nullptr) {
         std::cerr << "Error: No current CFG in declaration statement" << std::endl;
         return 0;
     }
@@ -171,16 +179,13 @@ antlrcpp::Any VisitorIR::visitDecl_stmt(ifccParser::Decl_stmtContext *ctx)
     current_cfg->add_to_symbol_table(varName, Type::INT_TYPE);
     int varIndex = current_cfg->get_var_index(varName);
 
-    if (ctx->expr())
-    {
+    if (ctx->expr()) {
         antlrcpp::Any result = visit(ctx->expr());
-        try
-        {
+        try {
             string resultStr = any_cast<string>(result);
             current_bb->add_IRInstr(IRInstr::Operation::wmem, Type::INT_TYPE, {"!" + to_string(varIndex), resultStr});
         }
-        catch (const std::bad_any_cast &e)
-        {
+        catch (const std::bad_any_cast &e) {
             std::cerr << "Error: Invalid expression type in declaration" << std::endl;
             return 0;
         }
@@ -189,10 +194,8 @@ antlrcpp::Any VisitorIR::visitDecl_stmt(ifccParser::Decl_stmtContext *ctx)
     return 0;
 }
 
-antlrcpp::Any VisitorIR::visitVarExpr(ifccParser::VarExprContext *ctx)
-{
-    if (current_cfg == nullptr)
-    {
+antlrcpp::Any VisitorIR::visitVarExpr(ifccParser::VarExprContext *ctx) {
+    if (current_cfg == nullptr) {
         std::cerr << "Error: No current CFG in variable expression" << std::endl;
         return string("0");
     }
@@ -207,10 +210,8 @@ antlrcpp::Any VisitorIR::visitVarExpr(ifccParser::VarExprContext *ctx)
     return result;
 }
 
-antlrcpp::Any VisitorIR::visitConstExpr(ifccParser::ConstExprContext *ctx)
-{
-    if (current_cfg == nullptr)
-    {
+antlrcpp::Any VisitorIR::visitConstExpr(ifccParser::ConstExprContext *ctx) {
+    if (current_cfg == nullptr) {
         std::cerr << "Error: No current CFG in constant expression" << std::endl;
         return string("0");
     }
@@ -222,10 +223,8 @@ antlrcpp::Any VisitorIR::visitConstExpr(ifccParser::ConstExprContext *ctx)
     return result;
 }
 
-antlrcpp::Any VisitorIR::visitAssignExpr(ifccParser::AssignExprContext *ctx)
-{
-    if (current_cfg == nullptr)
-    {
+antlrcpp::Any VisitorIR::visitAssignExpr(ifccParser::AssignExprContext *ctx) {
+    if (current_cfg == nullptr) {
         std::cerr << "Error: No current CFG in assignment expression" << std::endl;
         return string("0");
     }
@@ -235,16 +234,13 @@ antlrcpp::Any VisitorIR::visitAssignExpr(ifccParser::AssignExprContext *ctx)
     string rightStr = any_cast<string>(rightResult);
 
     // Gérer le côté gauche
-    if (auto varExpr = dynamic_cast<ifccParser::VarExprContext *>(ctx->expr(0)))
-    {
+    if (auto varExpr = dynamic_cast<ifccParser::VarExprContext *>(ctx->expr(0))) {
         // Cas simple : variable = expression
         string varName = varExpr->VAR()->getText();
         int varIndex = current_cfg->get_var_index(varName);
         current_bb->add_IRInstr(IRInstr::Operation::wmem, Type::INT_TYPE, {"!" + to_string(varIndex), rightStr});
         return rightStr;
-    }
-    else
-    {
+    } else {
         // Cas d'assignation chaînée : (expr = expr) = expr
         // On doit d'abord évaluer l'assignation de gauche
         antlrcpp::Any leftResult = visit(ctx->expr(0));
@@ -256,10 +252,8 @@ antlrcpp::Any VisitorIR::visitAssignExpr(ifccParser::AssignExprContext *ctx)
     }
 }
 
-antlrcpp::Any VisitorIR::visitAdditiveExpr(ifccParser::AdditiveExprContext *ctx)
-{
-    if (current_cfg == nullptr)
-    {
+antlrcpp::Any VisitorIR::visitAdditiveExpr(ifccParser::AdditiveExprContext *ctx) {
+    if (current_cfg == nullptr) {
         std::cerr << "Error: No current CFG in additive expression" << std::endl;
         return string("0");
     }
@@ -268,8 +262,7 @@ antlrcpp::Any VisitorIR::visitAdditiveExpr(ifccParser::AdditiveExprContext *ctx)
     antlrcpp::Any leftResult = visit(ctx->expr(0));
     antlrcpp::Any rightResult = visit(ctx->expr(1));
 
-    try
-    {
+    try {
         string leftStr = any_cast<string>(leftResult);
         string rightStr = any_cast<string>(rightResult);
 
@@ -279,17 +272,14 @@ antlrcpp::Any VisitorIR::visitAdditiveExpr(ifccParser::AdditiveExprContext *ctx)
         current_bb->add_IRInstr(operation, Type::INT_TYPE, {result, leftStr, rightStr});
         return result;
     }
-    catch (const std::bad_any_cast &e)
-    {
+    catch (const std::bad_any_cast &e) {
         std::cerr << "Error: Invalid type in additive expression" << std::endl;
         return string("0");
     }
 }
 
-antlrcpp::Any VisitorIR::visitMultiplicativeExpr(ifccParser::MultiplicativeExprContext *ctx)
-{
-    if (current_cfg == nullptr)
-    {
+antlrcpp::Any VisitorIR::visitMultiplicativeExpr(ifccParser::MultiplicativeExprContext *ctx) {
+    if (current_cfg == nullptr) {
         std::cerr << "Error: No current CFG in multiplicative expression" << std::endl;
         return string("0");
     }
@@ -298,8 +288,7 @@ antlrcpp::Any VisitorIR::visitMultiplicativeExpr(ifccParser::MultiplicativeExprC
     antlrcpp::Any leftResult = visit(ctx->expr(0));
     antlrcpp::Any rightResult = visit(ctx->expr(1));
 
-    try
-    {
+    try {
         string leftStr = any_cast<string>(leftResult);
         string rightStr = any_cast<string>(rightResult);
 
@@ -309,17 +298,14 @@ antlrcpp::Any VisitorIR::visitMultiplicativeExpr(ifccParser::MultiplicativeExprC
         current_bb->add_IRInstr(operation, Type::INT_TYPE, {result, leftStr, rightStr});
         return result;
     }
-    catch (const std::bad_any_cast &e)
-    {
+    catch (const std::bad_any_cast &e) {
         std::cerr << "Error: Invalid type in multiplicative expression" << std::endl;
         return string("0");
     }
 }
 
-antlrcpp::Any VisitorIR::visitUnaryExpr(ifccParser::UnaryExprContext *ctx)
-{
-    if (current_cfg == nullptr)
-    {
+antlrcpp::Any VisitorIR::visitUnaryExpr(ifccParser::UnaryExprContext *ctx) {
+    if (current_cfg == nullptr) {
         std::cerr << "Error: No current CFG in unary expression" << std::endl;
         return string("0");
     }
@@ -329,15 +315,12 @@ antlrcpp::Any VisitorIR::visitUnaryExpr(ifccParser::UnaryExprContext *ctx)
     string resultVar = createTempVar(Type::INT_TYPE);
 
     string op = ctx->children[0]->getText();
-    if (op == "-")
-    {
+    if (op == "-") {
         // Pour un moins unaire, on multiplie par -1
         string constVar = createTempVar(Type::INT_TYPE);
         current_bb->add_IRInstr(IRInstr::Operation::ldconst, Type::INT_TYPE, {constVar, "-1"});
         current_bb->add_IRInstr(IRInstr::Operation::mul, Type::INT_TYPE, {resultVar, operandVar, constVar});
-    }
-    else
-    {
+    } else {
         // Pour un plus unaire, on copie simplement la valeur
         current_bb->add_IRInstr(IRInstr::Operation::rmem, Type::INT_TYPE, {resultVar, operandVar});
     }
@@ -345,7 +328,65 @@ antlrcpp::Any VisitorIR::visitUnaryExpr(ifccParser::UnaryExprContext *ctx)
     return resultVar;
 }
 
-antlrcpp::Any VisitorIR::visitParensExpr(ifccParser::ParensExprContext *ctx)
-{
+antlrcpp::Any VisitorIR::visitParensExpr(ifccParser::ParensExprContext *ctx) {
     return visit(ctx->expr());
+}
+
+antlrcpp::Any VisitorIR::visitCallExpr(ifccParser::CallExprContext *ctx) {
+    std::cerr << "DEBUG: visitCallExpr called for function " << ctx->VAR()->getText() << std::endl;
+
+    if (current_cfg == nullptr) {
+        std::cerr << "Error: No current CFG in call expression" << std::endl;
+        return string("0");
+    }
+
+    string funcName = ctx->VAR()->getText();
+    string result = createTempVar(Type::INT_TYPE);
+
+    // Préparer les paramètres pour l'instruction call
+    vector <string> callParams = {funcName, result};
+
+    // Ajouter les arguments
+    if (ctx->arg_list()) {
+        antlrcpp::Any argListResult = visit(ctx->arg_list());
+        try {
+            vector <string> args = any_cast < vector < string >> (argListResult);
+            callParams.insert(callParams.end(), args.begin(), args.end());
+        } catch (const std::bad_any_cast &e) {
+            std::cerr << "Error: Invalid argument list type" << std::endl;
+        }
+    }
+
+    std::cerr << "DEBUG: Adding call instruction with " << callParams.size() << " parameters" << std::endl;
+
+    // Ajouter l'instruction d'appel avec tous les paramètres
+    current_bb->add_IRInstr(IRInstr::Operation::call, Type::INT_TYPE, callParams);
+
+    return result;
+}
+
+antlrcpp::Any VisitorIR::visitParam_list(ifccParser::Param_listContext *ctx) {
+    std::vector <Param> params;
+
+    // Traiter tous les paramètres
+    for (size_t i = 0; i < ctx->VAR().size(); i++) {
+        std::string paramName = ctx->VAR(i)->getText();
+        // Pour l'instant, tous les paramètres sont de type int
+        params.emplace_back(paramName, Type::INT_TYPE);
+    }
+
+    return params;
+}
+
+antlrcpp::Any VisitorIR::visitArg_list(ifccParser::Arg_listContext *ctx) {
+    std::vector <std::string> args;
+
+    // Traiter tous les arguments
+    for (auto expr: ctx->expr()) {
+        antlrcpp::Any argResult = visit(expr);
+        string argStr = any_cast<string>(argResult);
+        args.push_back(argStr);
+    }
+
+    return args;
 }
