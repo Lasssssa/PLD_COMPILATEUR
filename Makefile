@@ -9,6 +9,10 @@ LDFLAGS = -g
 default: all
 all: ifcc
 
+# ARM target
+arm: CCFLAGS += -DARM=1
+arm: ifcc
+
 ##########################################
 # Object files to compile
 OBJECTS = \
