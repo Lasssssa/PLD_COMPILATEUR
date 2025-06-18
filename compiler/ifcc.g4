@@ -19,7 +19,7 @@ decl_stmt: 'int' VAR ';' | 'int' VAR '=' expr ';' ;
 expr : expr ASSIGN <assoc=right> expr             # assignExpr
      | expr (EQ | NEQ | LT | GT | LE | GE) expr   # comparisonExpr
      | (PLUS | MINUS) expr                        # unaryExpr
-     | expr (MULT | DIV) expr                     # multiplicativeExpr
+     | expr (MULT | DIV | MOD) expr               # multiplicativeExpr
      | expr (PLUS | MINUS) expr                   # additiveExpr
      | VAR '(' arg_list? ')'                      # callExpr
      | VAR                                        # varExpr
@@ -42,6 +42,7 @@ PLUS : '+' ;
 MINUS : '-' ;
 MULT : '*' ;
 DIV : '/' ;
+MOD : '%' ;
 
 EQ : '==' ;
 NEQ : '!=' ;

@@ -65,6 +65,12 @@ void IRInstr::gen_asm_x86(ostream &o)
         o << "\tidivl\t" << IR_reg_to_asm(params[2]) << "\n";
         o << "\tmovl\t%eax, " << IR_reg_to_asm(params[0]) << "\n";
         break;
+    case mod:
+        o << "\tmovl\t" << IR_reg_to_asm(params[1]) << ", %eax\n";
+        o << "\tcltd\n"; // Sign extend eax into edx
+        o << "\tidivl\t" << IR_reg_to_asm(params[2]) << "\n";
+        o << "\tmovl\t%edx, " << IR_reg_to_asm(params[0]) << "\n";
+        break;
     case rmem:
         if (params[1][0] == '%')
         {
@@ -225,6 +231,13 @@ void IRInstr::gen_asm_arm(ostream &o)
         o << "\tldr w0, [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
         o << "\tldr w1, [sp, #" << IR_reg_to_asm(params[2]) << "]\n";
         o << "\tsdiv w0, w0, w1\n";
+        o << "\tstr w0, [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
+        break;
+    case mod:
+        o << "\tldr w0, [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
+        o << "\tldr w1, [sp, #" << IR_reg_to_asm(params[2]) << "]\n";
+        o << "\tsdiv w0, w0, w1\n";
+        o << "\tmov w0, w0\n";
         o << "\tstr w0, [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
         break;
     case rmem:

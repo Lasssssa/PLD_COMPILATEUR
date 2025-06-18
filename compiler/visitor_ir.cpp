@@ -366,7 +366,15 @@ antlrcpp::Any VisitorIR::visitMultiplicativeExpr(ifccParser::MultiplicativeExprC
         string rightStr = any_cast<string>(rightResult);
 
         string op = ctx->children[1]->getText();
-        IRInstr::Operation operation = (op == "*") ? IRInstr::Operation::mul : IRInstr::Operation::div;
+        IRInstr::Operation operation;
+        if (op == "*")
+            operation = IRInstr::Operation::mul;
+        else if (op == "/")
+            operation = IRInstr::Operation::div;
+        else if (op == "%")
+            operation = IRInstr::Operation::mod;
+        else
+            throw std::runtime_error("Opération multiplicative inconnue");
 
         current_bb->add_IRInstr(operation, Type::INT_TYPE, {result, leftStr, rightStr});
         return result;
