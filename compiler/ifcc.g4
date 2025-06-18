@@ -4,14 +4,14 @@ axiom : prog EOF ;
 
 prog : function* EOF ;
 
-function : 'int' VAR '(' param_list? ')' '{' stmt* '}' ;
+function : ('int'|'void') VAR '(' param_list? ')' '{' stmt* '}' ;
 
 stmt: return_stmt
     | decl_stmt
     | expr_stmt
     ;
 
-return_stmt: RETURN expr ';' ;
+return_stmt: RETURN expr? ';' ;
 expr_stmt: expr ';' ;
 decl_stmt: 'int' VAR ';' | 'int' VAR '=' expr ';' ;
 
