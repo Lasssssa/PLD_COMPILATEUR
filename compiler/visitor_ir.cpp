@@ -406,10 +406,15 @@ antlrcpp::Any VisitorIR::visitUnaryExpr(ifccParser::UnaryExprContext *ctx)
         current_bb->add_IRInstr(IRInstr::Operation::ldconst, Type::INT_TYPE, {constVar, "-1"});
         current_bb->add_IRInstr(IRInstr::Operation::mul, Type::INT_TYPE, {resultVar, operandVar, constVar});
     }
-    else
+    else if (op == "+")
     {
         // Pour un plus unaire, on copie simplement la valeur
         current_bb->add_IRInstr(IRInstr::Operation::rmem, Type::INT_TYPE, {resultVar, operandVar});
+    }
+    else if (op == "!")
+    {
+        // Pour la négation logique, on utilise l'opération NOT
+        current_bb->add_IRInstr(IRInstr::Operation::not_op, Type::INT_TYPE, {resultVar, operandVar});
     }
 
     return resultVar;

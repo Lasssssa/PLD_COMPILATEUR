@@ -45,6 +45,7 @@ public:
         cmp_gt,
         cmp_le,
         cmp_ge,
+        not_op,
         ret
     };
 

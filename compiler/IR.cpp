@@ -142,6 +142,13 @@ void IRInstr::gen_asm_x86(ostream &o)
         o << "\tmovzbl\t%al, %eax\n";
         o << "\tmovl\t%eax, " << IR_reg_to_asm(params[0]) << "\n";
         break;
+    case not_op:
+        o << "\tmovl\t" << IR_reg_to_asm(params[1]) << ", %eax\n";
+        o << "\tcmpl\t$0, %eax\n";
+        o << "\tsete\t%al\n";
+        o << "\tmovzbl\t%al, %eax\n";
+        o << "\tmovl\t%eax, " << IR_reg_to_asm(params[0]) << "\n";
+        break;
     case ret:
         o << "\tmovl\t" << IR_reg_to_asm(params[0]) << ", %eax\n";
         break;
@@ -254,6 +261,12 @@ void IRInstr::gen_asm_arm(ostream &o)
         break;
     case ret:
         o << "\tmovl\t" << IR_reg_to_asm(params[0]) << ", %eax\n";
+        break;
+    case not_op:
+        o << "\tldr w0, [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
+        o << "\tcmp w0, #0\n";
+        o << "\tcset w0, eq\n";
+        o << "\tstr w0, [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
         break;
     }
 }

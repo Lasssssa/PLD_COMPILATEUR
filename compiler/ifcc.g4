@@ -18,7 +18,7 @@ decl_stmt: 'int' VAR ';' | 'int' VAR '=' expr ';' ;
 // Expression avec priorités (du plus bas au plus haut)
 expr : expr ASSIGN <assoc=right> expr             # assignExpr
      | expr (EQ | NEQ | LT | GT | LE | GE) expr   # comparisonExpr
-     | (PLUS | MINUS) expr                        # unaryExpr
+     | (PLUS | MINUS | NOT) expr                  # unaryExpr
      | expr (MULT | DIV | MOD) expr               # multiplicativeExpr
      | expr (PLUS | MINUS) expr                   # additiveExpr
      | VAR '(' arg_list? ')'                      # callExpr
@@ -50,6 +50,8 @@ LT : '<' ;
 GT : '>' ;
 LE : '<=' ;
 GE : '>=' ;
+
+NOT : '!' ;
 
 COMMENT : '/*' .*? '*/' -> skip ;
 DIRECTIVE : '#' .*? '\n' -> skip ;
