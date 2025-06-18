@@ -2,9 +2,12 @@ grammar ifcc;
 
 axiom : prog EOF ;
 
-prog : function* EOF ;
+prog : (function | global_decl)* EOF ;
 
 function : ('int'|'void') VAR '(' param_list? ')' '{' stmt* '}' ;
+
+// Ajout de la règle pour les déclarations globales
+global_decl : 'int' VAR ';' | 'int' VAR '=' expr ';' ;
 
 stmt: return_stmt
     | decl_stmt

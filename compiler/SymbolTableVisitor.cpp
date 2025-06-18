@@ -8,6 +8,12 @@ antlrcpp::Any SymbolTableVisitor::visitProg(ifccParser::ProgContext *ctx)
 {
     std::cerr << "=== ANALYSE DE LA TABLE DES SYMBOLES ===" << std::endl;
 
+    // Visiter toutes les déclarations globales d'abord
+    for (auto globalDecl : ctx->global_decl())
+    {
+        this->visit(globalDecl);
+    }
+
     // Visiter toutes les fonctions
     for (auto func : ctx->function())
     {
@@ -41,9 +47,8 @@ antlrcpp::Any SymbolTableVisitor::visitFunction(ifccParser::FunctionContext *ctx
     // Définir la fonction courante
     currentFunction = funcName;
     
-    // Réinitialiser la table des symboles pour cette fonction
-    symbolTable.clear();
-    declaredVars.clear();
+    // Réinitialiser les variables locales pour cette fonction (mais pas les globales)
+    declaredVars.clear(); // Seulement les variables locales
     usedVars.clear();
     currentOffset = -8; // Commencer à -8 pour les variables locales
     
@@ -114,8 +119,8 @@ antlrcpp::Any SymbolTableVisitor::visitVarExpr(ifccParser::VarExprContext *ctx)
 {
     std::string varName = ctx->VAR()->getText();
 
-    // Vérifier si la variable a été déclarée
-    if (declaredVars.find(varName) == declaredVars.end())
+    // Vérifier si la variable a été déclarée (locale ou globale)
+    if (declaredVars.find(varName) == declaredVars.end() && globalVars.find(varName) == globalVars.end())
     {
         std::cerr << "ERREUR: Variable '" << varName << "' utilisée sans être déclarée!" << std::endl;
         hasErrors = true;
@@ -145,8 +150,8 @@ antlrcpp::Any SymbolTableVisitor::visitAssignExpr(ifccParser::AssignExprContext 
         // Cas simple : variable = expression
         std::string varName = varExpr->VAR()->getText();
 
-        // Vérifier que la variable est déclarée
-        if (declaredVars.find(varName) == declaredVars.end())
+        // Vérifier que la variable est déclarée (locale ou globale)
+        if (declaredVars.find(varName) == declaredVars.end() && globalVars.find(varName) == globalVars.end())
         {
             std::cerr << "ERREUR: Variable '" << varName << "' utilisée sans être déclarée!" << std::endl;
             hasErrors = true;
@@ -177,11 +182,23 @@ void SymbolTableVisitor::checkUnusedVariables()
     std::cerr << "=== VÉRIFICATION DES VARIABLES NON UTILISÉES ===" << std::endl;
 
     bool foundUnused = false;
+    
+    // Vérifier les variables locales
     for (const std::string &varName : declaredVars)
     {
         if (usedVars.find(varName) == usedVars.end())
         {
-            std::cerr << "AVERTISSEMENT: Variable '" << varName << "' déclarée mais jamais utilisée!" << std::endl;
+            std::cerr << "AVERTISSEMENT: Variable locale '" << varName << "' déclarée mais jamais utilisée!" << std::endl;
+            foundUnused = true;
+        }
+    }
+    
+    // Vérifier les variables globales
+    for (const std::string &varName : globalVars)
+    {
+        if (usedVars.find(varName) == usedVars.end())
+        {
+            std::cerr << "AVERTISSEMENT: Variable globale '" << varName << "' déclarée mais jamais utilisée!" << std::endl;
             foundUnused = true;
         }
     }
@@ -284,5 +301,34 @@ antlrcpp::Any SymbolTableVisitor::visitBitwiseOrExpr(ifccParser::BitwiseOrExprCo
     // Visiter les deux opérandes
     this->visit(ctx->expr(0));
     this->visit(ctx->expr(1));
+    return 0;
+}
+
+antlrcpp::Any SymbolTableVisitor::visitGlobal_decl(ifccParser::Global_declContext *ctx)
+{
+    std::string varName = ctx->VAR()->getText();
+
+    // Vérifier si la variable globale est déjà déclarée
+    if (globalVars.find(varName) != globalVars.end())
+    {
+        std::cerr << "ERREUR: Variable globale '" << varName << "' déclarée plusieurs fois!" << std::endl;
+        hasErrors = true;
+        return 0;
+    }
+
+    // Ajouter la variable globale à la table des symboles
+    // Pour les variables globales, on peut utiliser des offsets spéciaux ou une section .data
+    symbolTable[varName] = 0; // Offset temporaire pour les variables globales
+    globalVars.insert(varName);
+
+    std::cerr << "Déclaration globale: Variable '" << varName << "' ajoutée à la table des symboles" << std::endl;
+
+    // Si il y a une initialisation, visiter l'expression
+    if (ctx->expr())
+    {
+        std::cerr << "Initialisation globale de '" << varName << "' avec expression..." << std::endl;
+        this->visit(ctx->expr());
+    }
+
     return 0;
 }

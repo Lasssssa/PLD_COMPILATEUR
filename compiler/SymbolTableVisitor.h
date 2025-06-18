@@ -11,7 +11,8 @@ class SymbolTableVisitor : public ifccBaseVisitor
 {
 private:
     std::map<std::string, int> symbolTable; // nom de variable -> offset depuis %rbp
-    std::set<std::string> declaredVars;     // variables déclarées
+    std::set<std::string> declaredVars;     // variables locales déclarées
+    std::set<std::string> globalVars;       // variables globales déclarées
     std::set<std::string> usedVars;         // variables utilisées
     std::set<std::string> declaredFunctions; // fonctions déclarées
     std::set<std::string> functionsWithReturn; // fonctions qui ont un return
@@ -32,12 +33,13 @@ public:
 
     // Visiteurs ANTLR
     virtual antlrcpp::Any visitProg(ifccParser::ProgContext *ctx) override;
+    virtual antlrcpp::Any visitGlobal_decl(ifccParser::Global_declContext *ctx) override;
     virtual antlrcpp::Any visitDecl_stmt(ifccParser::Decl_stmtContext *ctx) override;
     virtual antlrcpp::Any visitVarExpr(ifccParser::VarExprContext *ctx) override;
     virtual antlrcpp::Any visitAssignExpr(ifccParser::AssignExprContext *ctx) override;
     virtual antlrcpp::Any visitFunction(ifccParser::FunctionContext *ctx) override;
     virtual antlrcpp::Any visitParam_list(ifccParser::Param_listContext *ctx) override;
-    virtual antlrcpp::Any visitReturn_stmt(ifccParser::Return_stmtContext *ctx) override; // Nouveau visiteur
+    virtual antlrcpp::Any visitReturn_stmt(ifccParser::Return_stmtContext *ctx) override;
     
     // Ajout des déclarations manquantes
     virtual antlrcpp::Any visitCallExpr(ifccParser::CallExprContext *ctx) override;
