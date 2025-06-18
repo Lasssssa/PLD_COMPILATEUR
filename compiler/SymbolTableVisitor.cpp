@@ -355,3 +355,17 @@ antlrcpp::Any SymbolTableVisitor::visitArg_list(ifccParser::Arg_listContext *ctx
     }
     return 0;
 }
+
+antlrcpp::Any SymbolTableVisitor::visitLogicalAndExpr(ifccParser::LogicalAndExprContext *ctx) {
+    // Visiter les deux opérandes
+    this->visit(ctx->expr(0));
+    this->visit(ctx->expr(1));
+    return 0;
+}
+
+antlrcpp::Any SymbolTableVisitor::visitLogicalOrExpr(ifccParser::LogicalOrExprContext *ctx) {
+    // Visiter les deux opérandes
+    this->visit(ctx->expr(0));
+    this->visit(ctx->expr(1));
+    return 0;
+}

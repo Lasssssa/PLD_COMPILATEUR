@@ -220,6 +220,66 @@ void IRInstr::gen_asm_x86(ostream &o)
         o << "\tpopq\t%rcx\n";
         o << "\tpopq\t%rax\n";
         break;
+    case logical_and:
+    {
+        // Pour && paresseux, on compare le premier opérande à 0
+        // Si c'est 0, on retourne 0, sinon on évalue le deuxième opérande
+        string dest = params[0];
+        string left = params[1];
+        string right = params[2];
+        
+        // Générer des labels uniques et valides (sans le !)
+        string label_base = dest.substr(1); // Enlever le ! du début
+        string false_label = "label_" + label_base + "_false";
+        string end_label = "label_" + label_base + "_end";
+        
+        // Charger le premier opérande
+        o << "\tmovl\t" << IR_reg_to_asm(left) << ", %eax" << endl;
+        // Comparer avec 0
+        o << "\tcmpl\t$0, %eax" << endl;
+        o << "\tje\t" << false_label << endl;
+        // Si non-zéro, évaluer le deuxième opérande
+        o << "\tmovl\t" << IR_reg_to_asm(right) << ", %eax" << endl;
+        o << "\tcmpl\t$0, %eax" << endl;
+        o << "\tmovl\t$0, %eax" << endl;
+        o << "\tsetne\t%al" << endl;
+        o << "\tmovl\t%eax, " << IR_reg_to_asm(dest) << endl;
+        o << "\tjmp\t" << end_label << endl;
+        o << false_label << ":" << endl;
+        o << "\tmovl\t$0, " << IR_reg_to_asm(dest) << endl;
+        o << end_label << ":" << endl;
+        break;
+    }
+    case logical_or:
+    {
+        // Pour || paresseux, on compare le premier opérande à 0
+        // Si c'est non-zéro, on retourne 1, sinon on évalue le deuxième opérande
+        string dest = params[0];
+        string left = params[1];
+        string right = params[2];
+        
+        // Générer des labels uniques et valides (sans le !)
+        string label_base = dest.substr(1); // Enlever le ! du début
+        string true_label = "label_" + label_base + "_true";
+        string end_label = "label_" + label_base + "_end";
+        
+        // Charger le premier opérande
+        o << "\tmovl\t" << IR_reg_to_asm(left) << ", %eax" << endl;
+        // Comparer avec 0
+        o << "\tcmpl\t$0, %eax" << endl;
+        o << "\tjne\t" << true_label << endl;
+        // Si zéro, évaluer le deuxième opérande
+        o << "\tmovl\t" << IR_reg_to_asm(right) << ", %eax" << endl;
+        o << "\tcmpl\t$0, %eax" << endl;
+        o << "\tmovl\t$0, %eax" << endl;
+        o << "\tsetne\t%al" << endl;
+        o << "\tmovl\t%eax, " << IR_reg_to_asm(dest) << endl;
+        o << "\tjmp\t" << end_label << endl;
+        o << true_label << ":" << endl;
+        o << "\tmovl\t$1, " << IR_reg_to_asm(dest) << endl;
+        o << end_label << ":" << endl;
+        break;
+    }
     }
 }
 

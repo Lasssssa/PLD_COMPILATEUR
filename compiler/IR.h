@@ -49,6 +49,8 @@ public:
         bit_and,
         bit_xor,
         bit_or,
+        logical_and,
+        logical_or,
         ret
     };
 

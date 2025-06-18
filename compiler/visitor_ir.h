@@ -61,6 +61,8 @@ public:
     virtual antlrcpp::Any visitConstExpr(ifccParser::ConstExprContext *ctx) override;
     virtual antlrcpp::Any visitCharExpr(ifccParser::CharExprContext *ctx) override;
     virtual antlrcpp::Any visitAssignExpr(ifccParser::AssignExprContext *ctx) override;
+    virtual antlrcpp::Any visitLogicalAndExpr(ifccParser::LogicalAndExprContext *ctx) override;
+    virtual antlrcpp::Any visitLogicalOrExpr(ifccParser::LogicalOrExprContext *ctx) override;
     virtual antlrcpp::Any visitAdditiveExpr(ifccParser::AdditiveExprContext *ctx) override;
     virtual antlrcpp::Any visitMultiplicativeExpr(ifccParser::MultiplicativeExprContext *ctx) override;
     virtual antlrcpp::Any visitUnaryExpr(ifccParser::UnaryExprContext *ctx) override;

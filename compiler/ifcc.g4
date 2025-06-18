@@ -20,6 +20,8 @@ decl_stmt: 'int' VAR ';' | 'int' VAR '=' expr ';' ;
 
 // Expression avec priorités (du plus bas au plus haut)
 expr : expr ASSIGN expr                             # assignExpr
+     | expr OR expr                                 # logicalOrExpr
+     | expr AND expr                                # logicalAndExpr
      | expr (EQ | NEQ | LT | GT | LE | GE) expr     # comparisonExpr
      | (PLUS | MINUS | NOT) expr                    # unaryExpr
      | expr (MULT | DIV | MOD) expr                 # multiplicativeExpr
@@ -60,6 +62,8 @@ LE : '<=' ;
 GE : '>=' ;
 
 NOT : '!' ;
+AND : '&&' ;  // Nouveau token pour l'opérateur logique AND
+OR : '||' ;   // Nouveau token pour l'opérateur logique OR
 
 BITAND : '&' ;
 BITXOR : '^' ;

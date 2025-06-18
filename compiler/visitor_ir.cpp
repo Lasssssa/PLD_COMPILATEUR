@@ -624,3 +624,59 @@ antlrcpp::Any VisitorIR::visitBitwiseOrExpr(ifccParser::BitwiseOrExprContext *ct
         return string("0");
     }
 }
+
+antlrcpp::Any VisitorIR::visitLogicalAndExpr(ifccParser::LogicalAndExprContext *ctx)
+{
+    if (current_cfg == nullptr)
+    {
+        std::cerr << "Error: No current CFG in logical AND expression" << std::endl;
+        return string("0");
+    }
+
+    string result = createTempVar(Type::INT_TYPE);
+    antlrcpp::Any leftResult = visit(ctx->expr(0));
+    antlrcpp::Any rightResult = visit(ctx->expr(1));
+
+    try
+    {
+        string leftStr = any_cast<string>(leftResult);
+        string rightStr = any_cast<string>(rightResult);
+
+        // Pour l'opérateur && paresseux, on utilise l'opération logical_and
+        current_bb->add_IRInstr(IRInstr::Operation::logical_and, Type::INT_TYPE, {result, leftStr, rightStr});
+        return result;
+    }
+    catch (const std::bad_any_cast &e)
+    {
+        std::cerr << "Error: Invalid type in logical AND expression" << std::endl;
+        return string("0");
+    }
+}
+
+antlrcpp::Any VisitorIR::visitLogicalOrExpr(ifccParser::LogicalOrExprContext *ctx)
+{
+    if (current_cfg == nullptr)
+    {
+        std::cerr << "Error: No current CFG in logical OR expression" << std::endl;
+        return string("0");
+    }
+
+    string result = createTempVar(Type::INT_TYPE);
+    antlrcpp::Any leftResult = visit(ctx->expr(0));
+    antlrcpp::Any rightResult = visit(ctx->expr(1));
+
+    try
+    {
+        string leftStr = any_cast<string>(leftResult);
+        string rightStr = any_cast<string>(rightResult);
+
+        // Pour l'opérateur || paresseux, on utilise l'opération logical_or
+        current_bb->add_IRInstr(IRInstr::Operation::logical_or, Type::INT_TYPE, {result, leftStr, rightStr});
+        return result;
+    }
+    catch (const std::bad_any_cast &e)
+    {
+        std::cerr << "Error: Invalid type in logical OR expression" << std::endl;
+        return string("0");
+    }
+}
