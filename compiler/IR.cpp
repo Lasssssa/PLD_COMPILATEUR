@@ -271,7 +271,7 @@ void BasicBlock::add_IRInstr(IRInstr::Operation op, Type t, vector<string> param
     instrs.push_back(instr);
 }
 
-void BasicBlock::gen_asm_x86(ostream &o)
+void BasicBlock::gen_asm(ostream &o)
 {
     // Génère le label du bloc
     o << label << ":" << endl;
@@ -313,18 +313,6 @@ CFG::CFG(DefFonction *ast)
 void CFG::add_bb(BasicBlock *bb)
 {
     bbs.push_back(bb);
-}
-
-void CFG::gen_asm_x86(ostream &o)
-{
-    // Génère le prologue
-    gen_asm_prologue(o);
-
-    // Génère le code pour chaque bloc
-    for (BasicBlock *bb : bbs)
-    {
-        bb->gen_asm_x86(o);
-    }
 }
 
 static void gen_asm_arm_prologue(ostream &o, int nextFreeSymbolIndex)

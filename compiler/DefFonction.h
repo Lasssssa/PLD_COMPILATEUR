@@ -22,9 +22,6 @@ public:
     Type getType() const { return type; }
     const std::vector<Param>& getParams() const { return parameters; }
     
-    // Méthode pour générer le code assembleur
-    void gen_asm_x86(std::ostream& o) const;
-
 private:
     std::string name;           // Nom de la fonction
     Type type;                  // Type de retour

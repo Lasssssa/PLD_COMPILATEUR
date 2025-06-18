@@ -99,7 +99,7 @@ class BasicBlock
 public:
     BasicBlock(CFG *cfg, string entry_label);
 
-    void gen_asm_x86(ostream &o); /**< x86 assembly code generation for this basic block (very simple) */
+    void gen_asm(ostream &o); /**< x86 assembly code generation for this basic block (very simple) */
 
     void add_IRInstr(IRInstr::Operation op, Type t, vector<string> params);
 
@@ -138,8 +138,6 @@ public:
 
     void add_bb(BasicBlock *bb);
 
-    // x86 code generation: could be encapsulated in a processor class in a retargetable compiler
-    void gen_asm_x86(ostream &o);
 
     void gen_asm_prologue(ostream &o);
     void gen_asm_epilogue(ostream &o);

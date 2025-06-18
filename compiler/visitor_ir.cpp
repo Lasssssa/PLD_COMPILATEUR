@@ -80,7 +80,7 @@ antlrcpp::Any VisitorIR::visitProg(ifccParser::ProgContext *ctx)
         // Générer le code de tous les blocs de base
         for (auto bb : cfg->get_bbs())
         {
-            bb->gen_asm_x86(std::cout);
+            bb->gen_asm(std::cout);
         }
 
         // Générer l'épilogue de la fonction
