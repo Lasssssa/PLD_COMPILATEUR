@@ -54,12 +54,6 @@ public:
     void gen_asm_x86(ostream &o); /**< x86 assembly code generation for this IR instruction */
     void gen_asm_arm(ostream &o); /**< ARM assembly code generation for this IR instruction */
 
-    // Ajout d'un accesseur pour la destination (premier paramètre)
-    string getDest() const { return params.empty() ? "" : params[0]; }
-
-    // Rendre IR_reg_to_asm public et statique
-    static string IR_reg_to_asm(string reg);
-
 protected:
     string IR_reg_to_asm(string reg); /**< helper method: inputs a IR reg or input variable, returns the proper assembly format */
 
