@@ -284,6 +284,25 @@ antlrcpp::Any VisitorIR::visitConstExpr(ifccParser::ConstExprContext *ctx)
     return result;
 }
 
+antlrcpp::Any VisitorIR::visitCharExpr(ifccParser::CharExprContext *ctx)
+{
+    if (current_cfg == nullptr)
+    {
+        std::cerr << "Error: No current CFG in character expression" << std::endl;
+        return string("0");
+    }
+
+    string charLiteral = ctx->CHAR_LITERAL()->getText();
+    // Extraire le caractère entre les guillemets simples
+    // charLiteral est de la forme 'a', on veut extraire 'a'
+    char character = charLiteral[1]; // Le caractère est à l'index 1
+    string value = to_string((int)character); // Convertir en valeur ASCII
+    
+    string result = createTempVar(Type::INT_TYPE);
+    current_bb->add_IRInstr(IRInstr::Operation::ldconst, Type::INT_TYPE, {result, value});
+    return result;
+}
+
 antlrcpp::Any VisitorIR::visitAssignExpr(ifccParser::AssignExprContext *ctx)
 {
     if (current_cfg == nullptr)

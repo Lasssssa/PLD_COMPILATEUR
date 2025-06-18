@@ -19,18 +19,19 @@ expr_stmt: expr ';' ;
 decl_stmt: 'int' VAR ';' | 'int' VAR '=' expr ';' ;
 
 // Expression avec priorités (du plus bas au plus haut)
-expr : expr ASSIGN <assoc=right> expr             # assignExpr
-     | expr (EQ | NEQ | LT | GT | LE | GE) expr   # comparisonExpr
-     | (PLUS | MINUS | NOT) expr                  # unaryExpr
-     | expr (MULT | DIV | MOD) expr               # multiplicativeExpr
-     | expr (PLUS | MINUS) expr                   # additiveExpr
-     | expr (BITAND) expr                         # bitwiseAndExpr
-     | expr (BITXOR) expr                         # bitwiseXorExpr
-     | expr (BITOR) expr                          # bitwiseOrExpr
-     | VAR '(' arg_list? ')'                      # callExpr
-     | VAR                                        # varExpr
-     | CONST                                      # constExpr
-     | '(' expr ')'                               # parensExpr
+expr : expr ASSIGN expr                             # assignExpr
+     | expr (EQ | NEQ | LT | GT | LE | GE) expr     # comparisonExpr
+     | (PLUS | MINUS | NOT) expr                    # unaryExpr
+     | expr (MULT | DIV | MOD) expr                 # multiplicativeExpr
+     | expr (PLUS | MINUS) expr                     # additiveExpr
+     | expr (BITAND) expr                           # bitwiseAndExpr
+     | expr (BITXOR) expr                           # bitwiseXorExpr
+     | expr (BITOR) expr                            # bitwiseOrExpr
+     | VAR '(' arg_list? ')'                        # callExpr
+     | VAR                                          # varExpr
+     | CONST                                        # constExpr
+     | CHAR_LITERAL                                 # charExpr
+     | '(' expr ')'                                 # parensExpr
      ;
 
 // Liste de paramètres
@@ -42,6 +43,7 @@ arg_list : expr (',' expr)* ;
 RETURN : 'return' ;
 VAR : [a-zA-Z_][a-zA-Z0-9_]* ;
 CONST : [0-9]+ ;
+CHAR_LITERAL : '\'' . '\'' ;  // Nouveau token pour les caractères
 
 ASSIGN : '=' ;
 PLUS : '+' ;

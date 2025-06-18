@@ -1,4 +1,5 @@
-#pragma once
+#ifndef SYMBOL_TABLE_VISITOR_H
+#define SYMBOL_TABLE_VISITOR_H
 
 #include "antlr4-runtime.h"
 #include "generated/ifccBaseVisitor.h"
@@ -21,7 +22,7 @@ private:
     bool hasErrors;                         // flag pour indiquer des erreurs
 
 public:
-    SymbolTableVisitor();
+    SymbolTableVisitor() : currentOffset(-8), hasErrors(false) {}
 
     // Getter pour la table des symboles
     const std::map<std::string, int> &getSymbolTable() const { return symbolTable; }
@@ -44,6 +45,7 @@ public:
     // Ajout des déclarations manquantes
     virtual antlrcpp::Any visitCallExpr(ifccParser::CallExprContext *ctx) override;
     virtual antlrcpp::Any visitConstExpr(ifccParser::ConstExprContext *ctx) override;
+    virtual antlrcpp::Any visitCharExpr(ifccParser::CharExprContext *ctx) override;
     virtual antlrcpp::Any visitAdditiveExpr(ifccParser::AdditiveExprContext *ctx) override;
     virtual antlrcpp::Any visitMultiplicativeExpr(ifccParser::MultiplicativeExprContext *ctx) override;
     virtual antlrcpp::Any visitUnaryExpr(ifccParser::UnaryExprContext *ctx) override;
@@ -51,4 +53,12 @@ public:
     virtual antlrcpp::Any visitBitwiseAndExpr(ifccParser::BitwiseAndExprContext *ctx) override;
     virtual antlrcpp::Any visitBitwiseXorExpr(ifccParser::BitwiseXorExprContext *ctx) override;
     virtual antlrcpp::Any visitBitwiseOrExpr(ifccParser::BitwiseOrExprContext *ctx) override;
+    virtual antlrcpp::Any visitExpr_stmt(ifccParser::Expr_stmtContext *ctx) override;
+    virtual antlrcpp::Any visitArg_list(ifccParser::Arg_listContext *ctx) override;
+    virtual antlrcpp::Any visitComparisonExpr(ifccParser::ComparisonExprContext *ctx) override;
+
+    // Méthodes utilitaires
+    void checkReturnStatements();
 };
+
+#endif

@@ -1,9 +1,5 @@
 #include "SymbolTableVisitor.h"
 
-SymbolTableVisitor::SymbolTableVisitor() : currentOffset(-8), hasErrors(false)
-{
-}
-
 antlrcpp::Any SymbolTableVisitor::visitProg(ifccParser::ProgContext *ctx)
 {
     std::cerr << "=== ANALYSE DE LA TABLE DES SYMBOLES ===" << std::endl;
@@ -330,5 +326,32 @@ antlrcpp::Any SymbolTableVisitor::visitGlobal_decl(ifccParser::Global_declContex
         this->visit(ctx->expr());
     }
 
+    return 0;
+}
+
+// Nouveau visiteur pour les caractères
+antlrcpp::Any SymbolTableVisitor::visitCharExpr(ifccParser::CharExprContext *ctx) {
+    // Rien à faire pour les caractères, ils sont traités comme des constantes
+    return 0;
+}
+
+antlrcpp::Any SymbolTableVisitor::visitExpr_stmt(ifccParser::Expr_stmtContext *ctx) {
+    // Visiter l'expression dans l'instruction
+    this->visit(ctx->expr());
+    return 0;
+}
+
+antlrcpp::Any SymbolTableVisitor::visitComparisonExpr(ifccParser::ComparisonExprContext *ctx) {
+    // Visiter les deux opérandes de la comparaison
+    this->visit(ctx->expr(0));
+    this->visit(ctx->expr(1));
+    return 0;
+}
+
+antlrcpp::Any SymbolTableVisitor::visitArg_list(ifccParser::Arg_listContext *ctx) {
+    // Visiter tous les arguments
+    for (auto expr : ctx->expr()) {
+        this->visit(expr);
+    }
     return 0;
 }
