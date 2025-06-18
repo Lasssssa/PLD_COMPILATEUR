@@ -21,6 +21,9 @@ expr : expr ASSIGN <assoc=right> expr             # assignExpr
      | (PLUS | MINUS | NOT) expr                  # unaryExpr
      | expr (MULT | DIV | MOD) expr               # multiplicativeExpr
      | expr (PLUS | MINUS) expr                   # additiveExpr
+     | expr (BITAND) expr                         # bitwiseAndExpr
+     | expr (BITXOR) expr                         # bitwiseXorExpr
+     | expr (BITOR) expr                          # bitwiseOrExpr
      | VAR '(' arg_list? ')'                      # callExpr
      | VAR                                        # varExpr
      | CONST                                      # constExpr
@@ -52,6 +55,10 @@ LE : '<=' ;
 GE : '>=' ;
 
 NOT : '!' ;
+
+BITAND : '&' ;
+BITXOR : '^' ;
+BITOR : '|' ;
 
 COMMENT : '/*' .*? '*/' -> skip ;
 DIRECTIVE : '#' .*? '\n' -> skip ;

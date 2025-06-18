@@ -524,3 +524,84 @@ antlrcpp::Any VisitorIR::visitComparisonExpr(ifccParser::ComparisonExprContext *
     current_bb->add_IRInstr(operation, Type::INT_TYPE, {result, leftStr, rightStr});
     return result;
 }
+
+antlrcpp::Any VisitorIR::visitBitwiseAndExpr(ifccParser::BitwiseAndExprContext *ctx)
+{
+    if (current_cfg == nullptr)
+    {
+        std::cerr << "Error: No current CFG in bitwise AND expression" << std::endl;
+        return string("0");
+    }
+
+    string result = createTempVar(Type::INT_TYPE);
+    antlrcpp::Any leftResult = visit(ctx->expr(0));
+    antlrcpp::Any rightResult = visit(ctx->expr(1));
+
+    try
+    {
+        string leftStr = any_cast<string>(leftResult);
+        string rightStr = any_cast<string>(rightResult);
+
+        current_bb->add_IRInstr(IRInstr::Operation::bit_and, Type::INT_TYPE, {result, leftStr, rightStr});
+        return result;
+    }
+    catch (const std::bad_any_cast &e)
+    {
+        std::cerr << "Error: Invalid type in bitwise AND expression" << std::endl;
+        return string("0");
+    }
+}
+
+antlrcpp::Any VisitorIR::visitBitwiseXorExpr(ifccParser::BitwiseXorExprContext *ctx)
+{
+    if (current_cfg == nullptr)
+    {
+        std::cerr << "Error: No current CFG in bitwise XOR expression" << std::endl;
+        return string("0");
+    }
+
+    string result = createTempVar(Type::INT_TYPE);
+    antlrcpp::Any leftResult = visit(ctx->expr(0));
+    antlrcpp::Any rightResult = visit(ctx->expr(1));
+
+    try
+    {
+        string leftStr = any_cast<string>(leftResult);
+        string rightStr = any_cast<string>(rightResult);
+
+        current_bb->add_IRInstr(IRInstr::Operation::bit_xor, Type::INT_TYPE, {result, leftStr, rightStr});
+        return result;
+    }
+    catch (const std::bad_any_cast &e)
+    {
+        std::cerr << "Error: Invalid type in bitwise XOR expression" << std::endl;
+        return string("0");
+    }
+}
+
+antlrcpp::Any VisitorIR::visitBitwiseOrExpr(ifccParser::BitwiseOrExprContext *ctx)
+{
+    if (current_cfg == nullptr)
+    {
+        std::cerr << "Error: No current CFG in bitwise OR expression" << std::endl;
+        return string("0");
+    }
+
+    string result = createTempVar(Type::INT_TYPE);
+    antlrcpp::Any leftResult = visit(ctx->expr(0));
+    antlrcpp::Any rightResult = visit(ctx->expr(1));
+
+    try
+    {
+        string leftStr = any_cast<string>(leftResult);
+        string rightStr = any_cast<string>(rightResult);
+
+        current_bb->add_IRInstr(IRInstr::Operation::bit_or, Type::INT_TYPE, {result, leftStr, rightStr});
+        return result;
+    }
+    catch (const std::bad_any_cast &e)
+    {
+        std::cerr << "Error: Invalid type in bitwise OR expression" << std::endl;
+        return string("0");
+    }
+}

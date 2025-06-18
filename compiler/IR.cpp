@@ -149,6 +149,21 @@ void IRInstr::gen_asm_x86(ostream &o)
         o << "\tmovzbl\t%al, %eax\n";
         o << "\tmovl\t%eax, " << IR_reg_to_asm(params[0]) << "\n";
         break;
+    case bit_and:
+        o << "\tmovl\t" << IR_reg_to_asm(params[1]) << ", %eax\n";
+        o << "\tandl\t" << IR_reg_to_asm(params[2]) << ", %eax\n";
+        o << "\tmovl\t%eax, " << IR_reg_to_asm(params[0]) << "\n";
+        break;
+    case bit_xor:
+        o << "\tmovl\t" << IR_reg_to_asm(params[1]) << ", %eax\n";
+        o << "\txorl\t" << IR_reg_to_asm(params[2]) << ", %eax\n";
+        o << "\tmovl\t%eax, " << IR_reg_to_asm(params[0]) << "\n";
+        break;
+    case bit_or:
+        o << "\tmovl\t" << IR_reg_to_asm(params[1]) << ", %eax\n";
+        o << "\torl\t" << IR_reg_to_asm(params[2]) << ", %eax\n";
+        o << "\tmovl\t%eax, " << IR_reg_to_asm(params[0]) << "\n";
+        break;
     case ret:
         o << "\tmovl\t" << IR_reg_to_asm(params[0]) << ", %eax\n";
         break;
@@ -266,6 +281,24 @@ void IRInstr::gen_asm_arm(ostream &o)
         o << "\tldr w0, [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
         o << "\tcmp w0, #0\n";
         o << "\tcset w0, eq\n";
+        o << "\tstr w0, [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
+        break;
+    case bit_and:
+        o << "\tldr w0, [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
+        o << "\tldr w1, [sp, #" << IR_reg_to_asm(params[2]) << "]\n";
+        o << "\tand w0, w0, w1\n";
+        o << "\tstr w0, [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
+        break;
+    case bit_xor:
+        o << "\tldr w0, [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
+        o << "\tldr w1, [sp, #" << IR_reg_to_asm(params[2]) << "]\n";
+        o << "\teor w0, w0, w1\n";
+        o << "\tstr w0, [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
+        break;
+    case bit_or:
+        o << "\tldr w0, [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
+        o << "\tldr w1, [sp, #" << IR_reg_to_asm(params[2]) << "]\n";
+        o << "\torr w0, w0, w1\n";
         o << "\tstr w0, [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
         break;
     }

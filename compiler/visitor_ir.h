@@ -69,6 +69,9 @@ public:
     virtual antlrcpp::Any visitParam_list(ifccParser::Param_listContext *ctx) override;
     virtual antlrcpp::Any visitArg_list(ifccParser::Arg_listContext *ctx) override;
     virtual antlrcpp::Any visitComparisonExpr(ifccParser::ComparisonExprContext *ctx) override;
+    virtual antlrcpp::Any visitBitwiseAndExpr(ifccParser::BitwiseAndExprContext *ctx) override;
+    virtual antlrcpp::Any visitBitwiseXorExpr(ifccParser::BitwiseXorExprContext *ctx) override;
+    virtual antlrcpp::Any visitBitwiseOrExpr(ifccParser::BitwiseOrExprContext *ctx) override;
 };
 
 #endif

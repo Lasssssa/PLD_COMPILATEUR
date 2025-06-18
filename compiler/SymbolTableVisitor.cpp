@@ -265,3 +265,24 @@ antlrcpp::Any SymbolTableVisitor::visitReturn_stmt(ifccParser::Return_stmtContex
     
     return 0;
 }
+
+antlrcpp::Any SymbolTableVisitor::visitBitwiseAndExpr(ifccParser::BitwiseAndExprContext *ctx) {
+    // Visiter les deux opérandes
+    this->visit(ctx->expr(0));
+    this->visit(ctx->expr(1));
+    return 0;
+}
+
+antlrcpp::Any SymbolTableVisitor::visitBitwiseXorExpr(ifccParser::BitwiseXorExprContext *ctx) {
+    // Visiter les deux opérandes
+    this->visit(ctx->expr(0));
+    this->visit(ctx->expr(1));
+    return 0;
+}
+
+antlrcpp::Any SymbolTableVisitor::visitBitwiseOrExpr(ifccParser::BitwiseOrExprContext *ctx) {
+    // Visiter les deux opérandes
+    this->visit(ctx->expr(0));
+    this->visit(ctx->expr(1));
+    return 0;
+}

@@ -46,6 +46,9 @@ public:
         cmp_le,
         cmp_ge,
         not_op,
+        bit_and,
+        bit_xor,
+        bit_or,
         ret
     };
 
