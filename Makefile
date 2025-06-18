@@ -73,6 +73,19 @@ gui:
 test:
 	python3 ./testfiles/ifcc-test.py ./testfiles
 
+# Test a single file
+test-file:
+	@if [ -z "$(fileName)" ]; then \
+		echo "Usage: make test-file fileName=<nom_du_fichier>"; \
+		echo "Example: make test-file fileName=01_return42.c"; \
+		exit 1; \
+	fi
+	@if [ ! -f "./testfiles/$(fileName)" ]; then \
+		echo "Error: File ./testfiles/$(fileName) not found"; \
+		exit 1; \
+	fi
+	python3 ./testfiles/ifcc-test.py ./testfiles/$(fileName)
+
 ##########################################
 # Clean everything
 clean:
