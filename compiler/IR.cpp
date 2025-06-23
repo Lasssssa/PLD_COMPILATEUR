@@ -197,6 +197,11 @@ namespace arm_codegen {
     }
 }
 
+// Shared utility for stack size calculation (align to 16 bytes)
+static int calc_aligned_stack_size(int symbol_count) {
+    return ((symbol_count + 1) * 4 + 15) & ~15;
+}
+
 void IRInstr::gen_asm_arm(ostream &o)
 {
     switch (op)
@@ -259,10 +264,9 @@ void IRInstr::gen_asm_arm(ostream &o)
         break;
     case ret: {
         arm_codegen::arm_load_stack_to_reg(o, "w0", IR_reg_to_asm(params[0]));
-        int stack_size = ((bb->cfg->get_symbol_count() + 1) * 4 + 15) & ~15;
-        if (stack_size > 0) {
+        int stack_size = calc_aligned_stack_size(bb->cfg->get_symbol_count());
+        if (stack_size > 0)
             o << "\tadd\tsp, sp, #" << stack_size << "\n";
-        }
         o << "\tldp\tx29, x30, [sp], #16\n";
         o << "\tret\n";
         break;
@@ -358,18 +362,17 @@ static void gen_asm_arm_prologue(ostream &o, int nextFreeSymbolIndex)
     o << "\tstp\tx29, x30, [sp, #-16]!\n";
     o << "\tmov\tx29, sp\n";
     // Allocate stack space for local variables (aligned to 16 bytes)
-    int stack_size = ((nextFreeSymbolIndex + 1) * 4 + 15) & ~15;
+    int stack_size = calc_aligned_stack_size(nextFreeSymbolIndex);
     if (stack_size > 0)
-    {
         o << "\tsub\tsp, sp, #" << stack_size << "\n";
-    }
 }
 
 static void gen_asm_x86_prologue(ostream &o, int nextFreeSymbolIndex)
 {
     o << "\tpushq %rbp" << endl;
     o << "\tmovq %rsp, %rbp" << endl;
-    o << "\tsubq $" << (nextFreeSymbolIndex * 4) << ", %rsp" << endl;
+    int stack_size = calc_aligned_stack_size(nextFreeSymbolIndex);
+    o << "\tsubq $" << stack_size << ", %rsp" << endl;
 }
 
 void CFG::gen_asm_prologue(ostream &o)
@@ -379,11 +382,6 @@ void CFG::gen_asm_prologue(ostream &o)
 #else
     gen_asm_x86_prologue(o, nextFreeSymbolIndex);
 #endif
-}
-
-void CFG::gen_asm_epilogue(ostream &o)
-{
-    // No-op: epilogue is now handled by ret IRInstr
 }
 
 void CFG::add_to_symbol_table(string name, Type t)
@@ -412,17 +410,4 @@ Type CFG::get_var_type(string name)
 string CFG::new_BB_name()
 {
     return "BB_" + to_string(nextBBnumber++);
-}
-
-static void gen_asm_arm_epilogue(ostream &o, int nextFreeSymbolIndex)
-{
-    // Calculate stack size for deallocation
-    int stack_size = ((nextFreeSymbolIndex + 1) * 4 + 15) & ~15;
-    if (stack_size > 0)
-    {
-        o << "\tadd\tsp, sp, #" << stack_size << "\n";
-    }
-    
-    // Restore frame pointer and link register
-    o << "\tldp\tx29, x30, [sp], #16\n";
 }
