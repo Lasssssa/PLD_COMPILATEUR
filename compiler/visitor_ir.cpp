@@ -285,6 +285,10 @@ antlrcpp::Any VisitorIR::visitReturn_stmt(ifccParser::Return_stmtContext *ctx)
         current_bb->add_IRInstr(IRInstr::Operation::ret, Type::INT_TYPE, {"!0"});
     }
 
+    // Couper le basic block après un return
+    BasicBlock* newBB = createNewBB();
+    setCurrentBB(newBB);
+
     return 0;
 }
 

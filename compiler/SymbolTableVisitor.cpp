@@ -302,7 +302,7 @@ antlrcpp::Any SymbolTableVisitor::visitReturn_stmt(ifccParser::Return_stmtContex
     } else {
         std::cerr << "Return sans expression..." << std::endl;
     }
-    
+
     return 0;
 }
 
