@@ -131,6 +131,8 @@ void IRInstr::gen_asm_x86(ostream &o)
         break;
     case ret:
         x86_codegen::mov_mem_to_reg(o, IR_reg_to_asm(params[0]), "%eax");
+        o << "\tleave\n";
+        o << "\tret\n";
         break;
     case call:
         x86_codegen::push_regs(o, x86_codegen::CALLER_SAVED, sizeof(x86_codegen::CALLER_SAVED)/sizeof(x86_codegen::CALLER_SAVED[0]));
