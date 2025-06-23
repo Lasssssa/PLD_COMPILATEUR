@@ -54,11 +54,8 @@ antlrcpp::Any SymbolTableVisitor::visitFunction(ifccParser::FunctionContext *ctx
         this->visit(ctx->param_list());
     }
     
-    // Visiter tous les statements de la fonction
-    for (auto stmt : ctx->stmt())
-    {
-        this->visit(stmt);
-    }
+    // Visiter le corps de la fonction
+    this->visit(ctx->block_stmt());
     
     return 0;
 }
@@ -341,8 +338,15 @@ antlrcpp::Any SymbolTableVisitor::visitExpr_stmt(ifccParser::Expr_stmtContext *c
     return 0;
 }
 
-antlrcpp::Any SymbolTableVisitor::visitComparisonExpr(ifccParser::ComparisonExprContext *ctx) {
-    // Visiter les deux opérandes de la comparaison
+antlrcpp::Any SymbolTableVisitor::visitEqualityExpr(ifccParser::EqualityExprContext *ctx)
+{
+    this->visit(ctx->expr(0));
+    this->visit(ctx->expr(1));
+    return 0;
+}
+
+antlrcpp::Any SymbolTableVisitor::visitRelationalExpr(ifccParser::RelationalExprContext *ctx)
+{
     this->visit(ctx->expr(0));
     this->visit(ctx->expr(1));
     return 0;
@@ -367,5 +371,25 @@ antlrcpp::Any SymbolTableVisitor::visitLogicalOrExpr(ifccParser::LogicalOrExprCo
     // Visiter les deux opérandes
     this->visit(ctx->expr(0));
     this->visit(ctx->expr(1));
+    return 0;
+}
+
+antlrcpp::Any SymbolTableVisitor::visitIf_stmt(ifccParser::If_stmtContext *ctx)
+{
+    this->visit(ctx->expr());
+    this->visit(ctx->stmt(0));
+    if (ctx->stmt(1))
+    {
+        this->visit(ctx->stmt(1));
+    }
+    return 0;
+}
+
+antlrcpp::Any SymbolTableVisitor::visitBlock_stmt(ifccParser::Block_stmtContext *ctx)
+{
+    for (auto stmt : ctx->stmt())
+    {
+        this->visit(stmt);
+    }
     return 0;
 }

@@ -2,6 +2,8 @@
 #include "DefFonction.h"
 #include <sstream>
 #include <iostream>
+#include <algorithm> // Pour std::reverse
+#include <set>
 
 using std::to_string;
 using namespace std;
@@ -36,6 +38,18 @@ void VisitorIR::setCurrentBB(BasicBlock *bb)
 {
     current_bb = bb;
     current_cfg->current_bb = bb;
+}
+
+void postOrderDFS(BasicBlock *bb, std::set<BasicBlock *> &visited, std::vector<BasicBlock *> &postOrder)
+{
+    if (!bb || visited.count(bb))
+    {
+        return;
+    }
+    visited.insert(bb);
+    postOrderDFS(bb->exit_true, visited, postOrder);
+    postOrderDFS(bb->exit_false, visited, postOrder);
+    postOrder.push_back(bb);
 }
 
 antlrcpp::Any VisitorIR::visitProg(ifccParser::ProgContext *ctx)
@@ -77,8 +91,16 @@ antlrcpp::Any VisitorIR::visitProg(ifccParser::ProgContext *ctx)
         // Générer le prologue de la fonction
         cfg->gen_asm_prologue(std::cout);
 
-        // Générer le code de tous les blocs de base
-        for (auto bb : cfg->get_bbs())
+        // Générer le code de tous les blocs de base avec un tri topologique (reverse post-order)
+        std::vector<BasicBlock *> postOrder;
+        std::set<BasicBlock *> visited_bbs;
+        if (!cfg->get_bbs().empty())
+        {
+            postOrderDFS(cfg->get_bbs()[0], visited_bbs, postOrder);
+        }
+        std::reverse(postOrder.begin(), postOrder.end());
+
+        for (auto bb : postOrder)
         {
             bb->gen_asm(std::cout);
         }
@@ -166,10 +188,60 @@ antlrcpp::Any VisitorIR::visitFunction(ifccParser::FunctionContext *ctx)
     }
 
     // Visiter les instructions de la fonction
+    visit(ctx->block_stmt());
+
+    return 0;
+}
+
+antlrcpp::Any VisitorIR::visitBlock_stmt(ifccParser::Block_stmtContext *ctx)
+{
     for (auto stmt : ctx->stmt())
     {
         visit(stmt);
     }
+    return 0;
+}
+
+antlrcpp::Any VisitorIR::visitIf_stmt(ifccParser::If_stmtContext *ctx)
+{
+    // 1. Évaluer l'expression de la condition
+    visit(ctx->expr());
+
+    // 2. Créer les blocs de base pour les branches then, else, et pour la suite
+    BasicBlock *then_bb = createNewBB();
+    BasicBlock *after_if_bb = createNewBB();
+    BasicBlock *else_bb = after_if_bb;
+
+    if (ctx->ELSE())
+    {
+        else_bb = createNewBB();
+    }
+
+    // 3. Le bloc courant se termine par un saut conditionnel
+    current_bb->exit_true = then_bb;
+    current_bb->exit_false = else_bb;
+
+    // 4. Générer le code pour le bloc 'then'
+    setCurrentBB(then_bb);
+    visit(ctx->stmt(0));
+    if (current_bb->exit_true == nullptr && current_bb->exit_false == nullptr)
+    {
+        current_bb->exit_true = after_if_bb; // Saut inconditionnel vers la suite
+    }
+
+    // 5. Générer le code pour le bloc 'else' s'il existe
+    if (ctx->ELSE())
+    {
+        setCurrentBB(else_bb);
+        visit(ctx->stmt(1));
+        if (current_bb->exit_true == nullptr && current_bb->exit_false == nullptr)
+        {
+            current_bb->exit_true = after_if_bb; // Saut inconditionnel vers la suite
+        }
+    }
+
+    // 6. Continuer la génération de code dans le bloc qui suit le if
+    setCurrentBB(after_if_bb);
 
     return 0;
 }
@@ -512,8 +584,8 @@ antlrcpp::Any VisitorIR::visitArg_list(ifccParser::Arg_listContext *ctx)
 
     return args;
 }
-// visitComparisonExpr
-antlrcpp::Any VisitorIR::visitComparisonExpr(ifccParser::ComparisonExprContext *ctx)
+
+antlrcpp::Any VisitorIR::visitEqualityExpr(ifccParser::EqualityExprContext *ctx)
 {
     antlrcpp::Any leftResult = visit(ctx->expr(0));
     antlrcpp::Any rightResult = visit(ctx->expr(1));
@@ -528,7 +600,26 @@ antlrcpp::Any VisitorIR::visitComparisonExpr(ifccParser::ComparisonExprContext *
         operation = IRInstr::Operation::cmp_eq;
     else if (op == "!=")
         operation = IRInstr::Operation::cmp_ne;
-    else if (op == "<")
+    else
+        throw std::runtime_error("Opérateur d'égalité inconnu");
+
+    string result = createTempVar(Type::INT_TYPE);
+    current_bb->add_IRInstr(operation, Type::INT_TYPE, {result, leftStr, rightStr});
+    return result;
+}
+
+antlrcpp::Any VisitorIR::visitRelationalExpr(ifccParser::RelationalExprContext *ctx)
+{
+    antlrcpp::Any leftResult = visit(ctx->expr(0));
+    antlrcpp::Any rightResult = visit(ctx->expr(1));
+
+    string leftStr = any_cast<string>(leftResult);
+    string rightStr = any_cast<string>(rightResult);
+
+    string op = ctx->children[1]->getText();
+
+    IRInstr::Operation operation;
+    if (op == "<")
         operation = IRInstr::Operation::cmp_lt;
     else if (op == ">")
         operation = IRInstr::Operation::cmp_gt;

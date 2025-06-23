@@ -60,7 +60,7 @@ compiler/generated/ifccLexer.cpp compiler/generated/ifccVisitor.cpp compiler/gen
 
 ##########################################
 # Visual parse tree
-FILE ?= testfiles/01_return42.c
+FILE ?= testfiles/137_if_complex_condition.c
 
 gui:
 	@mkdir -p compiler/generated compiler/build

@@ -4,7 +4,7 @@ axiom : prog EOF ;
 
 prog : (function | global_decl)* EOF ;
 
-function : ('int'|'void') VAR '(' param_list? ')' '{' stmt* '}' ;
+function : ('int'|'void') VAR '(' param_list? ')' block_stmt ;
 
 // Ajout de la règle pour les déclarations globales
 global_decl : 'int' VAR ';' | 'int' VAR '=' expr ';' ;
@@ -12,7 +12,13 @@ global_decl : 'int' VAR ';' | 'int' VAR '=' expr ';' ;
 stmt: return_stmt
     | decl_stmt
     | expr_stmt
+    | if_stmt
+    | block_stmt
     ;
+
+if_stmt: IF '(' expr ')' stmt (ELSE stmt)? ;
+
+block_stmt: '{' stmt* '}' ;
 
 return_stmt: RETURN expr? ';' ;
 expr_stmt: expr ';' ;
@@ -20,15 +26,16 @@ decl_stmt: 'int' VAR ';' | 'int' VAR '=' expr ';' ;
 
 // Expression avec priorités (du plus bas au plus haut)
 expr : expr ASSIGN expr                             # assignExpr
-     | expr OR expr                                 # logicalOrExpr
-     | expr AND expr                                # logicalAndExpr
-     | expr (EQ | NEQ | LT | GT | LE | GE) expr     # comparisonExpr
      | (PLUS | MINUS | NOT) expr                    # unaryExpr
      | expr (MULT | DIV | MOD) expr                 # multiplicativeExpr
      | expr (PLUS | MINUS) expr                     # additiveExpr
+     | expr (LT | GT | LE | GE) expr                # relationalExpr
+     | expr (EQ | NEQ) expr                         # equalityExpr
      | expr (BITAND) expr                           # bitwiseAndExpr
      | expr (BITXOR) expr                           # bitwiseXorExpr
      | expr (BITOR) expr                            # bitwiseOrExpr
+     | expr OR expr                                 # logicalOrExpr
+     | expr AND expr                                # logicalAndExpr
      | VAR '(' arg_list? ')'                        # callExpr
      | VAR                                          # varExpr
      | CONST                                        # constExpr
@@ -42,6 +49,8 @@ param_list : 'int' VAR (',' 'int' VAR)* ;
 // Liste d'arguments
 arg_list : expr (',' expr)* ;
 
+IF : 'if' ;
+ELSE : 'else' ;
 RETURN : 'return' ;
 VAR : [a-zA-Z_][a-zA-Z0-9_]* ;
 CONST : [0-9]+ ;
