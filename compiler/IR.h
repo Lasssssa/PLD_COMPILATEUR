@@ -47,19 +47,20 @@ public:
         ret
     };
 
+    Operation op; // Make op public so BasicBlock can check for ret
+
     /**  constructor (parameters: see the corresponding attributes) */
     IRInstr(BasicBlock *bb_, Operation op, Type t, vector<string> params);
 
     /** Actual code generation  */
     void gen_asm_x86(ostream &o); /**< x86 assembly code generation for this IR instruction */
     void gen_asm_arm(ostream &o); /**< ARM assembly code generation for this IR instruction */
+    static string IR_reg_to_asm(string reg); /**< helper method: inputs a IR reg or input variable, returns the proper assembly format */
 
 protected:
-    string IR_reg_to_asm(string reg); /**< helper method: inputs a IR reg or input variable, returns the proper assembly format */
 
 private:
     BasicBlock *bb; /**< The BB this instruction belongs to, which provides a pointer to the CFG this instruction belong to */
-    Operation op;
     Type t;
     vector<string> params; /**< For 3-op instrs: d, x, y; for ldconst: d, c;  For call: label, d, params;  for wmem and rmem: choose yourself */
     // if you subclass IRInstr, each IRInstr subclass has its parameters and the previous (very important) comment becomes useless: it would be a better design.
@@ -97,15 +98,18 @@ class BasicBlock
 {
 public:
     BasicBlock(CFG *cfg, string entry_label);
-
     void gen_asm_x86(ostream &o); /**< x86 assembly code generation for this basic block (very simple) */
-
+    void gen_asm_arm(ostream &o); /**< ARM assembly code generation for this basic block */
     void add_IRInstr(IRInstr::Operation op, Type t, vector<string> params);
+    string get_label();
+    void set_exit_true(BasicBlock *bb);
+    void set_exit_false(BasicBlock *bb);
+    BasicBlock *get_exit_true();
+    BasicBlock *get_exit_false();
+    void set_test_var(string var);
+    string get_test_var();
 
     // No encapsulation whatsoever here. Feel free to do better.
-    BasicBlock *exit_true;    /**< pointer to the next basic block, true branch. If nullptr, return from procedure */
-    BasicBlock *exit_false;   /**< pointer to the next basic block, false branch. If null_ptr, the basic block ends with an unconditional jump */
-    string label;             /**< label of the BB, also will be the label in the generated code */
     CFG *cfg;                 /** < the CFG where this block belongs */
     vector<IRInstr *> instrs; /** < the instructions themselves. */
 
@@ -115,6 +119,10 @@ public:
 
 protected:
     string name;
+    string label;
+    BasicBlock *exit_true;    /**< pointer to the next basic block, true branch. If nullptr, return from procedure */
+    BasicBlock *exit_false;   /**< pointer to the next basic block, false branch. If null_ptr, the basic block ends with an unconditional jump */
+    string test_var;
 };
 
 /** The class for the control flow graph, also includes the symbol table */

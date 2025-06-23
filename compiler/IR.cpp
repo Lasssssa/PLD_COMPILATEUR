@@ -66,32 +66,23 @@ void IRInstr::gen_asm_x86(ostream &o)
         o << "\tmovl\t%eax, " << IR_reg_to_asm(params[0]) << "\n";
         break;
     case rmem:
-        if (params[1][0] == '%')
-        {
-            // Lire depuis un registre
-            o << "\tmovl\t" << params[1] << ", " << IR_reg_to_asm(params[0]) << "\n";
-        }
-        else
-        {
-            // Lire depuis la mémoire
-            o << "\tmovl\t" << IR_reg_to_asm(params[1]) << ", %eax\n";
-            o << "\tmovl\t%eax, " << IR_reg_to_asm(params[0]) << "\n";
+        if (params[0][0] == 'w' && isdigit(params[0][1])) {
+            // Destination is a register: ldr wN, [sp, #offset]
+            o << "\tldr\t" << params[0] << ", [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
+        } else {
+            // Destination is a stack slot: ldr w8, [sp, #offset_src]; str w8, [sp, #offset_dst]
+            o << "\tldr\tw8, [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
+            o << "\tstr\tw8, [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
         }
         break;
     case wmem:
-        if (params[0] == params[1])
-        {
-            break;
-        }
-        if (params[1][0] == '%')
-        {
-            // Cas où le deuxième paramètre est un registre
-            o << "\tmovl\t" << params[1] << ", " << IR_reg_to_asm(params[0]) << "\n";
-        }
-        else
-        {
-            o << "\tmovl\t" << IR_reg_to_asm(params[1]) << ", %eax\n";
-            o << "\tmovl\t%eax, " << IR_reg_to_asm(params[0]) << "\n";
+        if (params[1][0] == 'w' && isdigit(params[1][1])) {
+            // Source is a register: str wN, [sp, #offset]
+            o << "\tstr\t" << params[1] << ", [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
+        } else {
+            // Source is a stack slot: ldr w8, [sp, #offset_src]; str w8, [sp, #offset_dst]
+            o << "\tldr\tw8, [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
+            o << "\tstr\tw8, [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
         }
         break;
     case cmp_eq:
@@ -136,61 +127,43 @@ void IRInstr::gen_asm_x86(ostream &o)
         o << "\tmovzbl\t%al, %eax\n";
         o << "\tmovl\t%eax, " << IR_reg_to_asm(params[0]) << "\n";
         break;
-    case ret:
+    case ret: {
         o << "\tmovl\t" << IR_reg_to_asm(params[0]) << ", %eax\n";
+        o << "\tleave\n";
+        o << "\tret\n";
         break;
+    }
     case call:
-        // Sauvegarder les registres qui pourraient être modifiés
-        o << "\tpushq\t%rax\n";
-        o << "\tpushq\t%rcx\n";
-        o << "\tpushq\t%rdx\n";
-        o << "\tpushq\t%rsi\n";
-        o << "\tpushq\t%rdi\n";
-        o << "\tpushq\t%r8\n";
-        o << "\tpushq\t%r9\n";
-        o << "\tpushq\t%r10\n";
-        o << "\tpushq\t%r11\n";
-
-        // Passer les paramètres dans les registres (convention x86_64)
-        // params[0] = nom de la fonction, params[1] = variable de retour
+        // Pass parameters in registers (ARM64 calling convention)
+        // params[0] = function name, params[1] = return variable
         // params[2..] = arguments
         for (size_t i = 2; i < params.size(); i++)
         {
             if (i == 2)
-                o << "\tmovl\t" << IR_reg_to_asm(params[i]) << ", %edi\n";
+                o << "\tldr\tw0, [sp, #" << IR_reg_to_asm(params[i]) << "]\n";
             else if (i == 3)
-                o << "\tmovl\t" << IR_reg_to_asm(params[i]) << ", %esi\n";
+                o << "\tldr\tw1, [sp, #" << IR_reg_to_asm(params[i]) << "]\n";
             else if (i == 4)
-                o << "\tmovl\t" << IR_reg_to_asm(params[i]) << ", %edx\n";
+                o << "\tldr\tw2, [sp, #" << IR_reg_to_asm(params[i]) << "]\n";
             else if (i == 5)
-                o << "\tmovl\t" << IR_reg_to_asm(params[i]) << ", %ecx\n";
+                o << "\tldr\tw3, [sp, #" << IR_reg_to_asm(params[i]) << "]\n";
             else if (i == 6)
-                o << "\tmovl\t" << IR_reg_to_asm(params[i]) << ", %r8d\n";
+                o << "\tldr\tw4, [sp, #" << IR_reg_to_asm(params[i]) << "]\n";
             else if (i == 7)
-                o << "\tmovl\t" << IR_reg_to_asm(params[i]) << ", %r9d\n";
+                o << "\tldr\tw5, [sp, #" << IR_reg_to_asm(params[i]) << "]\n";
             else
             {
-                // Pour plus de 6 paramètres, les empiler sur la pile
-                o << "\tpushq\t" << IR_reg_to_asm(params[i]) << "\n";
+                // For more than 6 parameters, push them onto the stack
+                o << "\tldr\tw8, [sp, #" << IR_reg_to_asm(params[i]) << "]\n";
+                o << "\tstr\tw8, [sp, #-16]!\n";
             }
         }
 
-        // Appeler la fonction
-        o << "\tcall\t" << params[0] << "\n";
+        // Call the function
+        o << "\tbl\t" << params[0] << "\n";
 
-        // Stocker le résultat
-        o << "\tmovl\t%eax, " << IR_reg_to_asm(params[1]) << "\n";
-
-        // Restaurer les registres
-        o << "\tpopq\t%r11\n";
-        o << "\tpopq\t%r10\n";
-        o << "\tpopq\t%r9\n";
-        o << "\tpopq\t%r8\n";
-        o << "\tpopq\t%rdi\n";
-        o << "\tpopq\t%rsi\n";
-        o << "\tpopq\t%rdx\n";
-        o << "\tpopq\t%rcx\n";
-        o << "\tpopq\t%rax\n";
+        // Store the result
+        o << "\tstr\tw0, [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
         break;
     }
 }
@@ -199,48 +172,154 @@ void IRInstr::gen_asm_arm(ostream &o)
 {
     switch (op)
     {
-    case ldconst:
-        o << "\tmov w0, #" << params[1] << "\n";
-        o << "\tstr w0, [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
+    case ldconst: {
+        int value = std::stoi(params[1]);
+        if (value >= 0 && value <= 65535) {
+            o << "\tmov\tw8, #" << value << "\n";
+        } else {
+            int low16 = value & 0xFFFF;
+            int high16 = (value >> 16) & 0xFFFF;
+            o << "\tmov\tw8, #" << low16 << "\n";
+            if (high16 != 0) {
+                o << "\tmovk\tw8, #" << high16 << ", lsl #16\n";
+            }
+        }
+        o << "\tstr\tw8, [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
         break;
+    }
     case add:
-        o << "\tldr w0, [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
-        o << "\tldr w1, [sp, #" << IR_reg_to_asm(params[2]) << "]\n";
-        o << "\tadd w0, w0, w1\n";
-        o << "\tstr w0, [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
+        o << "\tldr\tw8, [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
+        o << "\tldr\tw9, [sp, #" << IR_reg_to_asm(params[2]) << "]\n";
+        o << "\tadd\tw8, w8, w9\n";
+        o << "\tstr\tw8, [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
         break;
     case sub:
-        o << "\tldr w0, [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
-        o << "\tldr w1, [sp, #" << IR_reg_to_asm(params[2]) << "]\n";
-        o << "\tsub w0, w0, w1\n";
-        o << "\tstr w0, [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
+        o << "\tldr\tw8, [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
+        o << "\tldr\tw9, [sp, #" << IR_reg_to_asm(params[2]) << "]\n";
+        o << "\tsub\tw8, w8, w9\n";
+        o << "\tstr\tw8, [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
         break;
     case mul:
-        o << "\tldr w0, [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
-        o << "\tldr w1, [sp, #" << IR_reg_to_asm(params[2]) << "]\n";
-        o << "\tmul w0, w0, w1\n";
-        o << "\tstr w0, [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
+        o << "\tldr\tw8, [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
+        o << "\tldr\tw9, [sp, #" << IR_reg_to_asm(params[2]) << "]\n";
+        o << "\tmul\tw8, w8, w9\n";
+        o << "\tstr\tw8, [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
         break;
     case div:
-        o << "\tldr w0, [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
-        o << "\tldr w1, [sp, #" << IR_reg_to_asm(params[2]) << "]\n";
-        o << "\tsdiv w0, w0, w1\n";
-        o << "\tstr w0, [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
+        o << "\tldr\tw8, [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
+        o << "\tldr\tw9, [sp, #" << IR_reg_to_asm(params[2]) << "]\n";
+        o << "\tsdiv\tw8, w8, w9\n";
+        o << "\tstr\tw8, [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
         break;
     case rmem:
-        o << "\tldr w0, [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
-        o << "\tstr w0, [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
+        if (params[0].size() == 2 && params[0][0] == 'w' && isdigit(params[0][1])) {
+            // rmem: destination is a register, source is a stack slot
+            o << "\tldr\t" << params[0] << ", [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
+        } else if (params[1].size() == 2 && params[1][0] == 'w' && isdigit(params[1][1])) {
+            // rmem: source is a register, destination is a stack slot
+            o << "\tstr\t" << params[1] << ", [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
+        } else {
+            // Default: stack to stack (via w8)
+            o << "\tldr\tw8, [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
+            o << "\tstr\tw8, [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
+        }
         break;
     case wmem:
-        if (params[0] == params[1])
-        {
-            break;
+        if (params[1].size() == 2 && params[1][0] == 'w' && isdigit(params[1][1])) {
+            // wmem: source is a register, destination is a stack slot
+            o << "\tstr\t" << params[1] << ", [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
+        } else if (params[0].size() == 2 && params[0][0] == 'w' && isdigit(params[0][1])) {
+            // wmem: destination is a register, source is a stack slot
+            o << "\tldr\t" << params[0] << ", [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
+        } else {
+            // Default: stack to stack (via w8)
+            o << "\tldr\tw8, [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
+            o << "\tstr\tw8, [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
         }
-        o << "\tldr w0, [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
-        o << "\tstr w0, [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
         break;
-    case ret:
-        o << "\tmovl\t" << IR_reg_to_asm(params[0]) << ", %eax\n";
+    case cmp_eq:
+        o << "\tldr\tw8, [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
+        o << "\tldr\tw9, [sp, #" << IR_reg_to_asm(params[2]) << "]\n";
+        o << "\tcmp\tw8, w9\n";
+        o << "\tcset\tw8, eq\n";
+        o << "\tstr\tw8, [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
+        break;
+    case cmp_ne:
+        o << "\tldr\tw8, [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
+        o << "\tldr\tw9, [sp, #" << IR_reg_to_asm(params[2]) << "]\n";
+        o << "\tcmp\tw8, w9\n";
+        o << "\tcset\tw8, ne\n";
+        o << "\tstr\tw8, [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
+        break;
+    case cmp_lt:
+        o << "\tldr\tw8, [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
+        o << "\tldr\tw9, [sp, #" << IR_reg_to_asm(params[2]) << "]\n";
+        o << "\tcmp\tw8, w9\n";
+        o << "\tcset\tw8, lt\n";
+        o << "\tstr\tw8, [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
+        break;
+    case cmp_gt:
+        o << "\tldr\tw8, [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
+        o << "\tldr\tw9, [sp, #" << IR_reg_to_asm(params[2]) << "]\n";
+        o << "\tcmp\tw8, w9\n";
+        o << "\tcset\tw8, gt\n";
+        o << "\tstr\tw8, [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
+        break;
+    case cmp_le:
+        o << "\tldr\tw8, [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
+        o << "\tldr\tw9, [sp, #" << IR_reg_to_asm(params[2]) << "]\n";
+        o << "\tcmp\tw8, w9\n";
+        o << "\tcset\tw8, le\n";
+        o << "\tstr\tw8, [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
+        break;
+    case cmp_ge:
+        o << "\tldr\tw8, [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
+        o << "\tldr\tw9, [sp, #" << IR_reg_to_asm(params[2]) << "]\n";
+        o << "\tcmp\tw8, w9\n";
+        o << "\tcset\tw8, ge\n";
+        o << "\tstr\tw8, [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
+        break;
+    case ret: {
+        o << "\tldr\tw0, [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
+        int stack_size = ((bb->cfg->get_symbol_count() + 1) * 4 + 15) & ~15;
+        if (stack_size > 0) {
+            o << "\tadd\tsp, sp, #" << stack_size << "\n";
+        }
+        o << "\tldp\tx29, x30, [sp], #16\n";
+        o << "\tret\n";
+        break;
+    }
+    case call:
+        // Pass parameters in registers (ARM64 calling convention)
+        // params[0] = function name, params[1] = return variable
+        // params[2..] = arguments
+        for (size_t i = 2; i < params.size(); i++)
+        {
+            if (i == 2)
+                o << "\tldr\tw0, [sp, #" << IR_reg_to_asm(params[i]) << "]\n";
+            else if (i == 3)
+                o << "\tldr\tw1, [sp, #" << IR_reg_to_asm(params[i]) << "]\n";
+            else if (i == 4)
+                o << "\tldr\tw2, [sp, #" << IR_reg_to_asm(params[i]) << "]\n";
+            else if (i == 5)
+                o << "\tldr\tw3, [sp, #" << IR_reg_to_asm(params[i]) << "]\n";
+            else if (i == 6)
+                o << "\tldr\tw4, [sp, #" << IR_reg_to_asm(params[i]) << "]\n";
+            else if (i == 7)
+                o << "\tldr\tw5, [sp, #" << IR_reg_to_asm(params[i]) << "]\n";
+            else
+            {
+                // For more than 6 parameters, push them onto the stack
+                o << "\tldr\tw8, [sp, #" << IR_reg_to_asm(params[i]) << "]\n";
+                o << "\tstr\tw8, [sp, #-16]!\n";
+            }
+        }
+
+        // Call the function
+        o << "\tbl\t" << params[0] << "\n";
+
+        // Store the result
+        o << "\tstr\tw0, [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
         break;
     }
 }
@@ -260,37 +339,49 @@ void BasicBlock::add_IRInstr(IRInstr::Operation op, Type t, vector<string> param
 
 void BasicBlock::gen_asm_x86(ostream &o)
 {
-    // Génère le label du bloc
     o << label << ":" << endl;
-
-    // Génère le code pour chaque instruction
-    for (IRInstr *instr : instrs)
+    for (size_t i = 0; i < instrs.size(); ++i)
     {
 #ifdef ARM
-        instr->gen_asm_arm(o);
+        instrs[i]->gen_asm_arm(o);
 #else
-        instr->gen_asm_x86(o);
+        instrs[i]->gen_asm_x86(o);
 #endif
+        if (instrs[i]->op == IRInstr::ret) return;
     }
-
-    // Gestion des branches
-    if (exit_true == nullptr)
-    {
-        // Fin de fonction - ne pas générer l'épilogue ici
-        // L'épilogue sera généré séparément dans visitProg
-    }
-    else if (exit_false == nullptr)
-    {
-        // Branchement inconditionnel
+    if (exit_true == nullptr) {
+        // No epilogue here; ret handles it
+    } else if (exit_false == nullptr) {
         o << "\tjmp " << exit_true->label << endl;
-    }
-    else
-    {
-        // Branchement conditionnel
+    } else {
         o << "\tcmpl $0, %eax" << endl;
         o << "\tje " << exit_false->label << endl;
         o << "\tjmp " << exit_true->label << endl;
     }
+}
+
+void BasicBlock::gen_asm_arm(ostream &o)
+{
+    o << label << ":\n";
+    for (size_t i = 0; i < instrs.size(); ++i)
+    {
+        instrs[i]->gen_asm_arm(o);
+        if (instrs[i]->op == IRInstr::ret) return;
+    }
+    if (exit_true == nullptr) {
+        // No epilogue here; ret handles it
+    } else if (exit_false == nullptr) {
+        o << "\tb\t" << exit_true->get_label() << "\n";
+    } else {
+        o << "\tldr\tw8, [sp, #" << IRInstr::IR_reg_to_asm(test_var) << "]\n";
+        o << "\tcbz\tw8, " << exit_false->get_label() << "\n";
+        o << "\tb\t" << exit_true->get_label() << "\n";
+    }
+}
+
+string BasicBlock::get_label()
+{
+    return label;
 }
 
 // Implémentation de CFG
@@ -316,12 +407,15 @@ void CFG::gen_asm_x86(ostream &o)
 
 static void gen_asm_arm_prologue(ostream &o, int nextFreeSymbolIndex)
 {
-    // Calculate total stack size needed (including alignment)
-    int totalSize = 16 + (nextFreeSymbolIndex * 4); // 16 for frame + variables
-    // Round up to 16-byte alignment
-    totalSize = ((totalSize + 15) & ~15);
-
-    o << "\tsub sp, sp, #" << totalSize << "\n"; // Allocate all stack space at once
+    // Save frame pointer and link register
+    o << "\tstp\tx29, x30, [sp, #-16]!\n";
+    o << "\tmov\tx29, sp\n";
+    // Allocate stack space for local variables (aligned to 16 bytes)
+    int stack_size = ((nextFreeSymbolIndex + 1) * 4 + 15) & ~15;
+    if (stack_size > 0)
+    {
+        o << "\tsub\tsp, sp, #" << stack_size << "\n";
+    }
 }
 
 static void gen_asm_x86_prologue(ostream &o, int nextFreeSymbolIndex)
@@ -342,18 +436,7 @@ void CFG::gen_asm_prologue(ostream &o)
 
 void CFG::gen_asm_epilogue(ostream &o)
 {
-#ifdef ARM
-    // Calculate total stack size needed (including alignment)
-    int totalSize = 16 + (nextFreeSymbolIndex * 4); // 16 for frame + variables
-    // Round up to 16-byte alignment
-    totalSize = ((totalSize + 15) & ~15);
-
-    o << "\tadd sp, sp, #" << totalSize << "\n"; // Restore all stack space at once
-    o << "\tret\n";
-#else
-    o << "\tleave" << endl;
-    o << "\tret" << endl;
-#endif
+    // No-op: epilogue is now handled by ret IRInstr
 }
 
 void CFG::add_to_symbol_table(string name, Type t)
@@ -382,4 +465,17 @@ Type CFG::get_var_type(string name)
 string CFG::new_BB_name()
 {
     return "BB_" + to_string(nextBBnumber++);
+}
+
+static void gen_asm_arm_epilogue(ostream &o, int nextFreeSymbolIndex)
+{
+    // Calculate stack size for deallocation
+    int stack_size = ((nextFreeSymbolIndex + 1) * 4 + 15) & ~15;
+    if (stack_size > 0)
+    {
+        o << "\tadd\tsp, sp, #" << stack_size << "\n";
+    }
+    
+    // Restore frame pointer and link register
+    o << "\tldp\tx29, x30, [sp], #16\n";
 }

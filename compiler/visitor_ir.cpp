@@ -21,7 +21,11 @@ string VisitorIR::createTempVar(Type t)
 
 void VisitorIR::addInstr(IRInstr::Operation op, Type t, const vector<string> &params)
 {
+    if (!current_bb) return;
     current_bb->add_IRInstr(op, t, params);
+    if (op == IRInstr::ret) {
+        current_bb = nullptr;
+    }
 }
 
 BasicBlock *VisitorIR::createNewBB()
@@ -55,7 +59,7 @@ antlrcpp::Any VisitorIR::visitProg(ifccParser::ProgContext *ctx)
         std::string funcName = pair.first;
         CFG *cfg = pair.second;
 
-// Déclarer la fonction comme globale
+        // Déclarer la fonction comme globale
 #ifdef __APPLE__
         // Pour macOS, main doit s'appeler _main
         if (funcName == "main")
@@ -78,18 +82,23 @@ antlrcpp::Any VisitorIR::visitProg(ifccParser::ProgContext *ctx)
         cfg->gen_asm_prologue(std::cout);
 
         // Générer le code de tous les blocs de base
+#ifdef ARM
+        for (auto bb : cfg->get_bbs())
+        {
+            bb->gen_asm_arm(std::cout);
+        }
+#else
         for (auto bb : cfg->get_bbs())
         {
             bb->gen_asm_x86(std::cout);
         }
+#endif
 
         // Générer l'épilogue de la fonction
         cfg->gen_asm_epilogue(std::cout);
 
         // Ajouter les directives de taille pour la fonction
-#ifdef ARM
-        std::cout << "\t.size " << funcName << ", .-" << funcName << "\n";
-#else
+#ifndef ARM
 #ifndef __APPLE__
         std::cout << "\t.size\t" << funcName << ", .-" << funcName << "\n";
 #endif
@@ -105,6 +114,9 @@ antlrcpp::Any VisitorIR::visitProg(ifccParser::ProgContext *ctx)
 
 antlrcpp::Any VisitorIR::visitFunction(ifccParser::FunctionContext *ctx)
 {
+    // Save current_bb
+    bb_stack.push(current_bb);
+
     std::string funcName = ctx->VAR()->getText();
 
     // Créer la fonction
@@ -136,33 +148,35 @@ antlrcpp::Any VisitorIR::visitFunction(ifccParser::FunctionContext *ctx)
     {
         current_cfg->add_to_symbol_table(params[i].name, params[i].type);
         string paramVar = "!" + to_string(current_cfg->get_var_index(params[i].name));
-
-        // Récupérer les paramètres depuis les registres selon la convention x86_64
+#ifdef ARM
         if (i == 0)
-        {
-            current_bb->add_IRInstr(IRInstr::Operation::wmem, Type::INT_TYPE, {paramVar, "%edi"});
-        }
+            current_bb->add_IRInstr(IRInstr::Operation::wmem, Type::INT_TYPE, {paramVar, "w0"});
         else if (i == 1)
-        {
-            current_bb->add_IRInstr(IRInstr::Operation::wmem, Type::INT_TYPE, {paramVar, "%esi"});
-        }
+            current_bb->add_IRInstr(IRInstr::Operation::wmem, Type::INT_TYPE, {paramVar, "w1"});
         else if (i == 2)
-        {
-            current_bb->add_IRInstr(IRInstr::Operation::wmem, Type::INT_TYPE, {paramVar, "%edx"});
-        }
+            current_bb->add_IRInstr(IRInstr::Operation::wmem, Type::INT_TYPE, {paramVar, "w2"});
         else if (i == 3)
-        {
-            current_bb->add_IRInstr(IRInstr::Operation::wmem, Type::INT_TYPE, {paramVar, "%ecx"});
-        }
+            current_bb->add_IRInstr(IRInstr::Operation::wmem, Type::INT_TYPE, {paramVar, "w3"});
         else if (i == 4)
-        {
-            current_bb->add_IRInstr(IRInstr::Operation::wmem, Type::INT_TYPE, {paramVar, "%r8d"});
-        }
+            current_bb->add_IRInstr(IRInstr::Operation::wmem, Type::INT_TYPE, {paramVar, "w4"});
         else if (i == 5)
-        {
+            current_bb->add_IRInstr(IRInstr::Operation::wmem, Type::INT_TYPE, {paramVar, "w5"});
+        // For more than 6 params, would be on stack (not handled here)
+#else
+        if (i == 0)
+            current_bb->add_IRInstr(IRInstr::Operation::wmem, Type::INT_TYPE, {paramVar, "%edi"});
+        else if (i == 1)
+            current_bb->add_IRInstr(IRInstr::Operation::wmem, Type::INT_TYPE, {paramVar, "%esi"});
+        else if (i == 2)
+            current_bb->add_IRInstr(IRInstr::Operation::wmem, Type::INT_TYPE, {paramVar, "%edx"});
+        else if (i == 3)
+            current_bb->add_IRInstr(IRInstr::Operation::wmem, Type::INT_TYPE, {paramVar, "%ecx"});
+        else if (i == 4)
+            current_bb->add_IRInstr(IRInstr::Operation::wmem, Type::INT_TYPE, {paramVar, "%r8d"});
+        else if (i == 5)
             current_bb->add_IRInstr(IRInstr::Operation::wmem, Type::INT_TYPE, {paramVar, "%r9d"});
-        }
-        // Pour plus de 6 paramètres, ils seraient sur la pile
+        // For more than 6 params, would be on stack
+#endif
     }
 
     // Visiter les instructions de la fonction
@@ -170,6 +184,10 @@ antlrcpp::Any VisitorIR::visitFunction(ifccParser::FunctionContext *ctx)
     {
         visit(stmt);
     }
+
+    // Restore previous current_bb
+    current_bb = bb_stack.top();
+    bb_stack.pop();
 
     return 0;
 }
@@ -189,17 +207,14 @@ antlrcpp::Any VisitorIR::visitReturn_stmt(ifccParser::Return_stmtContext *ctx)
         {
             string resultStr = any_cast<string>(result);
 
-            // Si le résultat est déjà dans une variable temporaire, l'utiliser directement
             if (resultStr[0] == '!')
             {
-                // Le résultat est déjà dans une variable temporaire, l'utiliser directement
-                current_bb->add_IRInstr(IRInstr::Operation::ret, Type::INT_TYPE, {resultStr});
+                addInstr(IRInstr::Operation::ret, Type::INT_TYPE, {resultStr});
             }
             else
             {
-                // Copier dans la variable de retour
-                current_bb->add_IRInstr(IRInstr::Operation::wmem, Type::INT_TYPE, {"!0", resultStr});
-                current_bb->add_IRInstr(IRInstr::Operation::ret, Type::INT_TYPE, {"!0"});
+                addInstr(IRInstr::Operation::wmem, Type::INT_TYPE, {"!0", resultStr});
+                addInstr(IRInstr::Operation::ret, Type::INT_TYPE, {"!0"});
             }
         }
         catch (const std::bad_any_cast &e)
@@ -210,9 +225,8 @@ antlrcpp::Any VisitorIR::visitReturn_stmt(ifccParser::Return_stmtContext *ctx)
     }
     else
     {
-        current_bb->add_IRInstr(IRInstr::Operation::ret, Type::INT_TYPE, {"!0"});
+        addInstr(IRInstr::Operation::ret, Type::INT_TYPE, {"!0"});
     }
-
     return 0;
 }
 
@@ -414,8 +428,6 @@ antlrcpp::Any VisitorIR::visitParensExpr(ifccParser::ParensExprContext *ctx)
 
 antlrcpp::Any VisitorIR::visitCallExpr(ifccParser::CallExprContext *ctx)
 {
-    std::cerr << "DEBUG: visitCallExpr called for function " << ctx->VAR()->getText() << std::endl;
-
     if (current_cfg == nullptr)
     {
         std::cerr << "Error: No current CFG in call expression" << std::endl;
@@ -442,8 +454,6 @@ antlrcpp::Any VisitorIR::visitCallExpr(ifccParser::CallExprContext *ctx)
             std::cerr << "Error: Invalid argument list type" << std::endl;
         }
     }
-
-    std::cerr << "DEBUG: Adding call instruction with " << callParams.size() << " parameters" << std::endl;
 
     // Ajouter l'instruction d'appel avec tous les paramètres
     current_bb->add_IRInstr(IRInstr::Operation::call, Type::INT_TYPE, callParams);

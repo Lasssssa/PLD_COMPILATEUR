@@ -8,6 +8,7 @@
 #include <map>
 #include <string>
 #include <vector>
+#include <stack>
 
 // Structure pour représenter un paramètre de fonction
 struct Param
@@ -24,6 +25,7 @@ private:
     map<string, CFG *> cfgs;
     CFG *current_cfg;
     BasicBlock *current_bb;
+    std::stack<BasicBlock*> bb_stack;
     int nextFreeSymbolIndex;
     map<string, int> symbolTable;
     int nextBBnumber;
