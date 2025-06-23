@@ -3,6 +3,8 @@
 SymbolTableVisitor::SymbolTableVisitor() : currentOffset(-8), hasErrors(false) {
     declaredFunctions.insert("putchar");
     declaredFunctions.insert("getchar");
+    functionParamCount["putchar"] = 1;
+    functionParamCount["getchar"] = 0;
 }
 
 antlrcpp::Any SymbolTableVisitor::visitProg(ifccParser::ProgContext *ctx)
@@ -61,6 +63,12 @@ antlrcpp::Any SymbolTableVisitor::visitFunction(ifccParser::FunctionContext *ctx
     
     // Visiter le corps de la fonction
     this->visit(ctx->block_stmt());
+    
+    int paramCount = 0;
+    if (ctx->param_list()) {
+        paramCount = ctx->param_list()->VAR().size();
+    }
+    functionParamCount[funcName] = paramCount;
     
     return 0;
 }
@@ -228,6 +236,17 @@ antlrcpp::Any SymbolTableVisitor::visitCallExpr(ifccParser::CallExprContext *ctx
     if (declaredFunctions.find(calledFunc) == declaredFunctions.end()) {
         std::cerr << "ERREUR: Appel à la fonction '" << calledFunc << "' qui n'est pas déclarée !" << std::endl;
         hasErrors = true;
+    } else {
+        int expected = functionParamCount[calledFunc];
+        int given = 0;
+        if (ctx->arg_list()) {
+            given = ctx->arg_list()->expr().size();
+        }
+        if (expected != given) {
+            std::cerr << "ERREUR: Appel à la fonction '" << calledFunc << "' avec " << given
+                      << " argument(s), mais " << expected << " attendu(s) !" << std::endl;
+            hasErrors = true;
+        }
     }
     // Visiter tous les arguments de l'appel de fonction
     if (ctx->arg_list()) {

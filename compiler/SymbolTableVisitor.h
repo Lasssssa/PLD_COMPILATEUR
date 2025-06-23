@@ -20,6 +20,7 @@ private:
     std::string currentFunction;            // nom de la fonction courante
     int currentOffset;                      // offset actuel (commence à -4, décrémente par 4)
     bool hasErrors;                         // flag pour indiquer des erreurs
+    std::map<std::string, int> functionParamCount;
 
 public:
     SymbolTableVisitor();
