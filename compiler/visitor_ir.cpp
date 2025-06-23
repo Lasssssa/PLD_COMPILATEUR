@@ -206,16 +206,8 @@ antlrcpp::Any VisitorIR::visitReturn_stmt(ifccParser::Return_stmtContext *ctx)
         try
         {
             string resultStr = any_cast<string>(result);
-
-            if (resultStr[0] == '!')
-            {
-                addInstr(IRInstr::Operation::ret, Type::INT_TYPE, {resultStr});
-            }
-            else
-            {
-                addInstr(IRInstr::Operation::wmem, Type::INT_TYPE, {"!0", resultStr});
-                addInstr(IRInstr::Operation::ret, Type::INT_TYPE, {"!0"});
-            }
+            addInstr(IRInstr::Operation::wmem, Type::INT_TYPE, {"!0", resultStr});
+            addInstr(IRInstr::Operation::ret, Type::INT_TYPE, {"!0"});
         }
         catch (const std::bad_any_cast &e)
         {

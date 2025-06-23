@@ -36,135 +36,162 @@ string IRInstr::IR_reg_to_asm(string reg)
 IRInstr::IRInstr(BasicBlock *bb_, Operation op, Type t, vector<string> params)
     : bb(bb_), op(op), t(t), params(params) {}
 
+// Helper functions for codegen
+namespace x86_codegen {
+    constexpr const char* ARG_REGS[] = {"%edi", "%esi", "%edx", "%ecx", "%r8d", "%r9d"};
+    constexpr const char* CALLER_SAVED[] = {"%rax", "%rcx", "%rdx", "%rsi", "%rdi", "%r8", "%r9", "%r10", "%r11"};
+
+    void mov_mem_to_reg(ostream &o, const string &mem, const string &reg) {
+        o << "\tmovl\t" << mem << ", " << reg << "\n";
+    }
+    void mov_reg_to_mem(ostream &o, const string &reg, const string &mem) {
+        o << "\tmovl\t" << reg << ", " << mem << "\n";
+    }
+    void mov_reg_to_reg(ostream &o, const string &src, const string &dst) {
+        o << "\tmovl\t" << src << ", " << dst << "\n";
+    }
+    void push_regs(ostream &o, const char* const regs[], size_t n) {
+        for (size_t i = 0; i < n; ++i) o << "\tpushq\t" << regs[i] << "\n";
+    }
+    void pop_regs_reverse(ostream &o, const char* const regs[], size_t n) {
+        for (size_t i = n; i-- > 0;) o << "\tpopq\t" << regs[i] << "\n";
+    }
+    void emit_cmp_set(ostream &o, const string &lhs, const string &rhs, const char* set_instr, const string &dst) {
+        mov_mem_to_reg(o, lhs, "%eax");
+        o << "\tcmpl\t" << rhs << ", %eax\n";
+        o << "\t" << set_instr << "\t%al\n";
+        o << "\tmovzbl\t%al, %eax\n";
+        mov_reg_to_mem(o, "%eax", dst);
+    }
+}
+
 void IRInstr::gen_asm_x86(ostream &o)
 {
     switch (op)
     {
     case ldconst:
         o << "\tmovl\t$" << params[1] << ", %eax\n";
-        o << "\tmovl\t%eax, " << IR_reg_to_asm(params[0]) << "\n";
+        x86_codegen::mov_reg_to_mem(o, "%eax", IR_reg_to_asm(params[0]));
         break;
     case add:
-        o << "\tmovl\t" << IR_reg_to_asm(params[1]) << ", %eax\n";
+        x86_codegen::mov_mem_to_reg(o, IR_reg_to_asm(params[1]), "%eax");
         o << "\taddl\t" << IR_reg_to_asm(params[2]) << ", %eax\n";
-        o << "\tmovl\t%eax, " << IR_reg_to_asm(params[0]) << "\n";
+        x86_codegen::mov_reg_to_mem(o, "%eax", IR_reg_to_asm(params[0]));
         break;
     case sub:
-        o << "\tmovl\t" << IR_reg_to_asm(params[1]) << ", %eax\n";
+        x86_codegen::mov_mem_to_reg(o, IR_reg_to_asm(params[1]), "%eax");
         o << "\tsubl\t" << IR_reg_to_asm(params[2]) << ", %eax\n";
-        o << "\tmovl\t%eax, " << IR_reg_to_asm(params[0]) << "\n";
+        x86_codegen::mov_reg_to_mem(o, "%eax", IR_reg_to_asm(params[0]));
         break;
     case mul:
-        o << "\tmovl\t" << IR_reg_to_asm(params[1]) << ", %eax\n";
+        x86_codegen::mov_mem_to_reg(o, IR_reg_to_asm(params[1]), "%eax");
         o << "\timull\t" << IR_reg_to_asm(params[2]) << ", %eax\n";
-        o << "\tmovl\t%eax, " << IR_reg_to_asm(params[0]) << "\n";
+        x86_codegen::mov_reg_to_mem(o, "%eax", IR_reg_to_asm(params[0]));
         break;
     case div:
-        o << "\tmovl\t" << IR_reg_to_asm(params[1]) << ", %eax\n";
-        o << "\tcltd\n"; // Sign extend eax into edx
+        x86_codegen::mov_mem_to_reg(o, IR_reg_to_asm(params[1]), "%eax");
+        o << "\tcltd\n";
         o << "\tidivl\t" << IR_reg_to_asm(params[2]) << "\n";
-        o << "\tmovl\t%eax, " << IR_reg_to_asm(params[0]) << "\n";
+        x86_codegen::mov_reg_to_mem(o, "%eax", IR_reg_to_asm(params[0]));
         break;
     case rmem:
-        if (params[0][0] == 'w' && isdigit(params[0][1])) {
-            // Destination is a register: ldr wN, [sp, #offset]
-            o << "\tldr\t" << params[0] << ", [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
-        } else {
-            // Destination is a stack slot: ldr w8, [sp, #offset_src]; str w8, [sp, #offset_dst]
-            o << "\tldr\tw8, [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
-            o << "\tstr\tw8, [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
+        if (params[1][0] == '%')
+            x86_codegen::mov_reg_to_mem(o, params[1], IR_reg_to_asm(params[0]));
+        else {
+            x86_codegen::mov_mem_to_reg(o, IR_reg_to_asm(params[1]), "%eax");
+            x86_codegen::mov_reg_to_mem(o, "%eax", IR_reg_to_asm(params[0]));
         }
         break;
     case wmem:
-        if (params[1][0] == 'w' && isdigit(params[1][1])) {
-            // Source is a register: str wN, [sp, #offset]
-            o << "\tstr\t" << params[1] << ", [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
-        } else {
-            // Source is a stack slot: ldr w8, [sp, #offset_src]; str w8, [sp, #offset_dst]
-            o << "\tldr\tw8, [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
-            o << "\tstr\tw8, [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
+        if (params[0] == params[1]) break;
+        if (params[1][0] == '%')
+            x86_codegen::mov_reg_to_mem(o, params[1], IR_reg_to_asm(params[0]));
+        else {
+            x86_codegen::mov_mem_to_reg(o, IR_reg_to_asm(params[1]), "%eax");
+            x86_codegen::mov_reg_to_mem(o, "%eax", IR_reg_to_asm(params[0]));
         }
         break;
     case cmp_eq:
-        o << "\tmovl\t" << IR_reg_to_asm(params[1]) << ", %eax\n";
-        o << "\tcmpl\t" << IR_reg_to_asm(params[2]) << ", %eax\n";
-        o << "\tsete\t%al\n";
-        o << "\tmovzbl\t%al, %eax\n";
-        o << "\tmovl\t%eax, " << IR_reg_to_asm(params[0]) << "\n";
+        x86_codegen::emit_cmp_set(o, IR_reg_to_asm(params[1]), IR_reg_to_asm(params[2]), "sete", IR_reg_to_asm(params[0]));
         break;
     case cmp_ne:
-        o << "\tmovl\t" << IR_reg_to_asm(params[1]) << ", %eax\n";
-        o << "\tcmpl\t" << IR_reg_to_asm(params[2]) << ", %eax\n";
-        o << "\tsetne\t%al\n";
-        o << "\tmovzbl\t%al, %eax\n";
-        o << "\tmovl\t%eax, " << IR_reg_to_asm(params[0]) << "\n";
+        x86_codegen::emit_cmp_set(o, IR_reg_to_asm(params[1]), IR_reg_to_asm(params[2]), "setne", IR_reg_to_asm(params[0]));
         break;
     case cmp_lt:
-        o << "\tmovl\t" << IR_reg_to_asm(params[1]) << ", %eax\n";
-        o << "\tcmpl\t" << IR_reg_to_asm(params[2]) << ", %eax\n";
-        o << "\tsetl\t%al\n";
-        o << "\tmovzbl\t%al, %eax\n";
-        o << "\tmovl\t%eax, " << IR_reg_to_asm(params[0]) << "\n";
+        x86_codegen::emit_cmp_set(o, IR_reg_to_asm(params[1]), IR_reg_to_asm(params[2]), "setl", IR_reg_to_asm(params[0]));
         break;
     case cmp_gt:
-        o << "\tmovl\t" << IR_reg_to_asm(params[1]) << ", %eax\n";
-        o << "\tcmpl\t" << IR_reg_to_asm(params[2]) << ", %eax\n";
-        o << "\tsetg\t%al\n";
-        o << "\tmovzbl\t%al, %eax\n";
-        o << "\tmovl\t%eax, " << IR_reg_to_asm(params[0]) << "\n";
+        x86_codegen::emit_cmp_set(o, IR_reg_to_asm(params[1]), IR_reg_to_asm(params[2]), "setg", IR_reg_to_asm(params[0]));
         break;
     case cmp_le:
-        o << "\tmovl\t" << IR_reg_to_asm(params[1]) << ", %eax\n";
-        o << "\tcmpl\t" << IR_reg_to_asm(params[2]) << ", %eax\n";
-        o << "\tsetle\t%al\n";
-        o << "\tmovzbl\t%al, %eax\n";
-        o << "\tmovl\t%eax, " << IR_reg_to_asm(params[0]) << "\n";
+        x86_codegen::emit_cmp_set(o, IR_reg_to_asm(params[1]), IR_reg_to_asm(params[2]), "setle", IR_reg_to_asm(params[0]));
         break;
     case cmp_ge:
-        o << "\tmovl\t" << IR_reg_to_asm(params[1]) << ", %eax\n";
-        o << "\tcmpl\t" << IR_reg_to_asm(params[2]) << ", %eax\n";
-        o << "\tsetge\t%al\n";
-        o << "\tmovzbl\t%al, %eax\n";
-        o << "\tmovl\t%eax, " << IR_reg_to_asm(params[0]) << "\n";
+        x86_codegen::emit_cmp_set(o, IR_reg_to_asm(params[1]), IR_reg_to_asm(params[2]), "setge", IR_reg_to_asm(params[0]));
         break;
-    case ret: {
-        o << "\tmovl\t" << IR_reg_to_asm(params[0]) << ", %eax\n";
-        o << "\tleave\n";
-        o << "\tret\n";
+    case ret:
+        x86_codegen::mov_mem_to_reg(o, IR_reg_to_asm(params[0]), "%eax");
+        break;
+    case call:
+        x86_codegen::push_regs(o, x86_codegen::CALLER_SAVED, sizeof(x86_codegen::CALLER_SAVED)/sizeof(x86_codegen::CALLER_SAVED[0]));
+        for (size_t i = 2; i < params.size(); i++) {
+            if (i - 2 < sizeof(x86_codegen::ARG_REGS)/sizeof(x86_codegen::ARG_REGS[0]))
+                x86_codegen::mov_mem_to_reg(o, IR_reg_to_asm(params[i]), x86_codegen::ARG_REGS[i-2]);
+            else
+                o << "\tpushq\t" << IR_reg_to_asm(params[i]) << "\n";
+        }
+        o << "\tcall\t" << params[0] << "\n";
+        x86_codegen::mov_reg_to_mem(o, "%eax", IR_reg_to_asm(params[1]));
+        x86_codegen::pop_regs_reverse(o, x86_codegen::CALLER_SAVED, sizeof(x86_codegen::CALLER_SAVED)/sizeof(x86_codegen::CALLER_SAVED[0]));
         break;
     }
-    case call:
-        // Pass parameters in registers (ARM64 calling convention)
-        // params[0] = function name, params[1] = return variable
-        // params[2..] = arguments
-        for (size_t i = 2; i < params.size(); i++)
-        {
-            if (i == 2)
-                o << "\tldr\tw0, [sp, #" << IR_reg_to_asm(params[i]) << "]\n";
-            else if (i == 3)
-                o << "\tldr\tw1, [sp, #" << IR_reg_to_asm(params[i]) << "]\n";
-            else if (i == 4)
-                o << "\tldr\tw2, [sp, #" << IR_reg_to_asm(params[i]) << "]\n";
-            else if (i == 5)
-                o << "\tldr\tw3, [sp, #" << IR_reg_to_asm(params[i]) << "]\n";
-            else if (i == 6)
-                o << "\tldr\tw4, [sp, #" << IR_reg_to_asm(params[i]) << "]\n";
-            else if (i == 7)
-                o << "\tldr\tw5, [sp, #" << IR_reg_to_asm(params[i]) << "]\n";
-            else
-            {
-                // For more than 6 parameters, push them onto the stack
-                o << "\tldr\tw8, [sp, #" << IR_reg_to_asm(params[i]) << "]\n";
-                o << "\tstr\tw8, [sp, #-16]!\n";
+}
+
+// ARM codegen helpers
+namespace arm_codegen {
+    constexpr const char* ARM_ARG_REGS[] = {"w0", "w1", "w2", "w3", "w4", "w5"};
+    constexpr const char* ARM_TMP_REGS[] = {"w8", "w9"};
+
+    void arm_load_stack_to_reg(ostream &o, const string &reg, const string &slot) {
+        o << "\tldr\t" << reg << ", [sp, #" << slot << "]\n";
+    }
+    void arm_store_reg_to_stack(ostream &o, const string &reg, const string &slot) {
+        o << "\tstr\t" << reg << ", [sp, #" << slot << "]\n";
+    }
+    void arm_binop(ostream &o, const char* op, const string &dst, const string &lhs, const string &rhs) {
+        arm_load_stack_to_reg(o, ARM_TMP_REGS[0], lhs);
+        arm_load_stack_to_reg(o, ARM_TMP_REGS[1], rhs);
+        o << "\t" << op << "\t" << ARM_TMP_REGS[0] << ", " << ARM_TMP_REGS[0] << ", " << ARM_TMP_REGS[1] << "\n";
+        arm_store_reg_to_stack(o, ARM_TMP_REGS[0], dst);
+    }
+    void arm_cmp_set(ostream &o, const string &cond, const string &dst, const string &lhs, const string &rhs) {
+        arm_load_stack_to_reg(o, ARM_TMP_REGS[0], lhs);
+        arm_load_stack_to_reg(o, ARM_TMP_REGS[1], rhs);
+        o << "\tcmp\t" << ARM_TMP_REGS[0] << ", " << ARM_TMP_REGS[1] << "\n";
+        o << "\tcset\t" << ARM_TMP_REGS[0] << ", " << cond << "\n";
+        arm_store_reg_to_stack(o, ARM_TMP_REGS[0], dst);
+    }
+    void arm_pass_args(ostream &o, const vector<string> &params, size_t start) {
+        for (size_t i = start; i < params.size(); ++i) {
+            if (i - start < sizeof(ARM_ARG_REGS)/sizeof(ARM_ARG_REGS[0]))
+                arm_load_stack_to_reg(o, ARM_ARG_REGS[i-start], IRInstr::IR_reg_to_asm(params[i]));
+            else {
+                arm_load_stack_to_reg(o, ARM_TMP_REGS[0], IRInstr::IR_reg_to_asm(params[i]));
+                o << "\tstr\t" << ARM_TMP_REGS[0] << ", [sp, #-16]!\n";
             }
         }
-
-        // Call the function
-        o << "\tbl\t" << params[0] << "\n";
-
-        // Store the result
-        o << "\tstr\tw0, [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
-        break;
+    }
+    void arm_mov_const(ostream &o, int value, const string &reg) {
+        if (value >= 0 && value <= 65535) {
+            o << "\tmov\t" << reg << ", #" << value << "\n";
+        } else {
+            int low16 = value & 0xFFFF;
+            int high16 = (value >> 16) & 0xFFFF;
+            o << "\tmov\t" << reg << ", #" << low16 << "\n";
+            if (high16 != 0) {
+                o << "\tmovk\t" << reg << ", #" << high16 << ", lsl #16\n";
+            }
+        }
     }
 }
 
@@ -174,113 +201,62 @@ void IRInstr::gen_asm_arm(ostream &o)
     {
     case ldconst: {
         int value = std::stoi(params[1]);
-        if (value >= 0 && value <= 65535) {
-            o << "\tmov\tw8, #" << value << "\n";
-        } else {
-            int low16 = value & 0xFFFF;
-            int high16 = (value >> 16) & 0xFFFF;
-            o << "\tmov\tw8, #" << low16 << "\n";
-            if (high16 != 0) {
-                o << "\tmovk\tw8, #" << high16 << ", lsl #16\n";
-            }
-        }
-        o << "\tstr\tw8, [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
+        arm_codegen::arm_mov_const(o, value, arm_codegen::ARM_TMP_REGS[0]);
+        arm_codegen::arm_store_reg_to_stack(o, arm_codegen::ARM_TMP_REGS[0], IR_reg_to_asm(params[0]));
         break;
     }
     case add:
-        o << "\tldr\tw8, [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
-        o << "\tldr\tw9, [sp, #" << IR_reg_to_asm(params[2]) << "]\n";
-        o << "\tadd\tw8, w8, w9\n";
-        o << "\tstr\tw8, [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
+        arm_codegen::arm_binop(o, "add", IR_reg_to_asm(params[0]), IR_reg_to_asm(params[1]), IR_reg_to_asm(params[2]));
         break;
     case sub:
-        o << "\tldr\tw8, [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
-        o << "\tldr\tw9, [sp, #" << IR_reg_to_asm(params[2]) << "]\n";
-        o << "\tsub\tw8, w8, w9\n";
-        o << "\tstr\tw8, [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
+        arm_codegen::arm_binop(o, "sub", IR_reg_to_asm(params[0]), IR_reg_to_asm(params[1]), IR_reg_to_asm(params[2]));
         break;
     case mul:
-        o << "\tldr\tw8, [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
-        o << "\tldr\tw9, [sp, #" << IR_reg_to_asm(params[2]) << "]\n";
-        o << "\tmul\tw8, w8, w9\n";
-        o << "\tstr\tw8, [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
+        arm_codegen::arm_binop(o, "mul", IR_reg_to_asm(params[0]), IR_reg_to_asm(params[1]), IR_reg_to_asm(params[2]));
         break;
     case div:
-        o << "\tldr\tw8, [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
-        o << "\tldr\tw9, [sp, #" << IR_reg_to_asm(params[2]) << "]\n";
-        o << "\tsdiv\tw8, w8, w9\n";
-        o << "\tstr\tw8, [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
+        arm_codegen::arm_binop(o, "sdiv", IR_reg_to_asm(params[0]), IR_reg_to_asm(params[1]), IR_reg_to_asm(params[2]));
         break;
     case rmem:
         if (params[0].size() == 2 && params[0][0] == 'w' && isdigit(params[0][1])) {
-            // rmem: destination is a register, source is a stack slot
-            o << "\tldr\t" << params[0] << ", [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
+            arm_codegen::arm_load_stack_to_reg(o, params[0], IR_reg_to_asm(params[1]));
         } else if (params[1].size() == 2 && params[1][0] == 'w' && isdigit(params[1][1])) {
-            // rmem: source is a register, destination is a stack slot
-            o << "\tstr\t" << params[1] << ", [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
+            arm_codegen::arm_store_reg_to_stack(o, params[1], IR_reg_to_asm(params[0]));
         } else {
-            // Default: stack to stack (via w8)
-            o << "\tldr\tw8, [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
-            o << "\tstr\tw8, [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
+            arm_codegen::arm_load_stack_to_reg(o, arm_codegen::ARM_TMP_REGS[0], IR_reg_to_asm(params[1]));
+            arm_codegen::arm_store_reg_to_stack(o, arm_codegen::ARM_TMP_REGS[0], IR_reg_to_asm(params[0]));
         }
         break;
     case wmem:
         if (params[1].size() == 2 && params[1][0] == 'w' && isdigit(params[1][1])) {
-            // wmem: source is a register, destination is a stack slot
-            o << "\tstr\t" << params[1] << ", [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
+            arm_codegen::arm_store_reg_to_stack(o, params[1], IR_reg_to_asm(params[0]));
         } else if (params[0].size() == 2 && params[0][0] == 'w' && isdigit(params[0][1])) {
-            // wmem: destination is a register, source is a stack slot
-            o << "\tldr\t" << params[0] << ", [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
+            arm_codegen::arm_load_stack_to_reg(o, params[0], IR_reg_to_asm(params[1]));
         } else {
-            // Default: stack to stack (via w8)
-            o << "\tldr\tw8, [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
-            o << "\tstr\tw8, [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
+            arm_codegen::arm_load_stack_to_reg(o, arm_codegen::ARM_TMP_REGS[0], IR_reg_to_asm(params[1]));
+            arm_codegen::arm_store_reg_to_stack(o, arm_codegen::ARM_TMP_REGS[0], IR_reg_to_asm(params[0]));
         }
         break;
     case cmp_eq:
-        o << "\tldr\tw8, [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
-        o << "\tldr\tw9, [sp, #" << IR_reg_to_asm(params[2]) << "]\n";
-        o << "\tcmp\tw8, w9\n";
-        o << "\tcset\tw8, eq\n";
-        o << "\tstr\tw8, [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
+        arm_codegen::arm_cmp_set(o, "eq", IR_reg_to_asm(params[0]), IR_reg_to_asm(params[1]), IR_reg_to_asm(params[2]));
         break;
     case cmp_ne:
-        o << "\tldr\tw8, [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
-        o << "\tldr\tw9, [sp, #" << IR_reg_to_asm(params[2]) << "]\n";
-        o << "\tcmp\tw8, w9\n";
-        o << "\tcset\tw8, ne\n";
-        o << "\tstr\tw8, [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
+        arm_codegen::arm_cmp_set(o, "ne", IR_reg_to_asm(params[0]), IR_reg_to_asm(params[1]), IR_reg_to_asm(params[2]));
         break;
     case cmp_lt:
-        o << "\tldr\tw8, [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
-        o << "\tldr\tw9, [sp, #" << IR_reg_to_asm(params[2]) << "]\n";
-        o << "\tcmp\tw8, w9\n";
-        o << "\tcset\tw8, lt\n";
-        o << "\tstr\tw8, [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
+        arm_codegen::arm_cmp_set(o, "lt", IR_reg_to_asm(params[0]), IR_reg_to_asm(params[1]), IR_reg_to_asm(params[2]));
         break;
     case cmp_gt:
-        o << "\tldr\tw8, [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
-        o << "\tldr\tw9, [sp, #" << IR_reg_to_asm(params[2]) << "]\n";
-        o << "\tcmp\tw8, w9\n";
-        o << "\tcset\tw8, gt\n";
-        o << "\tstr\tw8, [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
+        arm_codegen::arm_cmp_set(o, "gt", IR_reg_to_asm(params[0]), IR_reg_to_asm(params[1]), IR_reg_to_asm(params[2]));
         break;
     case cmp_le:
-        o << "\tldr\tw8, [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
-        o << "\tldr\tw9, [sp, #" << IR_reg_to_asm(params[2]) << "]\n";
-        o << "\tcmp\tw8, w9\n";
-        o << "\tcset\tw8, le\n";
-        o << "\tstr\tw8, [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
+        arm_codegen::arm_cmp_set(o, "le", IR_reg_to_asm(params[0]), IR_reg_to_asm(params[1]), IR_reg_to_asm(params[2]));
         break;
     case cmp_ge:
-        o << "\tldr\tw8, [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
-        o << "\tldr\tw9, [sp, #" << IR_reg_to_asm(params[2]) << "]\n";
-        o << "\tcmp\tw8, w9\n";
-        o << "\tcset\tw8, ge\n";
-        o << "\tstr\tw8, [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
+        arm_codegen::arm_cmp_set(o, "ge", IR_reg_to_asm(params[0]), IR_reg_to_asm(params[1]), IR_reg_to_asm(params[2]));
         break;
     case ret: {
-        o << "\tldr\tw0, [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
+        arm_codegen::arm_load_stack_to_reg(o, "w0", IR_reg_to_asm(params[0]));
         int stack_size = ((bb->cfg->get_symbol_count() + 1) * 4 + 15) & ~15;
         if (stack_size > 0) {
             o << "\tadd\tsp, sp, #" << stack_size << "\n";
@@ -290,36 +266,9 @@ void IRInstr::gen_asm_arm(ostream &o)
         break;
     }
     case call:
-        // Pass parameters in registers (ARM64 calling convention)
-        // params[0] = function name, params[1] = return variable
-        // params[2..] = arguments
-        for (size_t i = 2; i < params.size(); i++)
-        {
-            if (i == 2)
-                o << "\tldr\tw0, [sp, #" << IR_reg_to_asm(params[i]) << "]\n";
-            else if (i == 3)
-                o << "\tldr\tw1, [sp, #" << IR_reg_to_asm(params[i]) << "]\n";
-            else if (i == 4)
-                o << "\tldr\tw2, [sp, #" << IR_reg_to_asm(params[i]) << "]\n";
-            else if (i == 5)
-                o << "\tldr\tw3, [sp, #" << IR_reg_to_asm(params[i]) << "]\n";
-            else if (i == 6)
-                o << "\tldr\tw4, [sp, #" << IR_reg_to_asm(params[i]) << "]\n";
-            else if (i == 7)
-                o << "\tldr\tw5, [sp, #" << IR_reg_to_asm(params[i]) << "]\n";
-            else
-            {
-                // For more than 6 parameters, push them onto the stack
-                o << "\tldr\tw8, [sp, #" << IR_reg_to_asm(params[i]) << "]\n";
-                o << "\tstr\tw8, [sp, #-16]!\n";
-            }
-        }
-
-        // Call the function
+        arm_codegen::arm_pass_args(o, params, 2);
         o << "\tbl\t" << params[0] << "\n";
-
-        // Store the result
-        o << "\tstr\tw0, [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
+        arm_codegen::arm_store_reg_to_stack(o, "w0", IR_reg_to_asm(params[1]));
         break;
     }
 }
@@ -342,11 +291,7 @@ void BasicBlock::gen_asm_x86(ostream &o)
     o << label << ":" << endl;
     for (size_t i = 0; i < instrs.size(); ++i)
     {
-#ifdef ARM
-        instrs[i]->gen_asm_arm(o);
-#else
         instrs[i]->gen_asm_x86(o);
-#endif
         if (instrs[i]->op == IRInstr::ret) return;
     }
     if (exit_true == nullptr) {
