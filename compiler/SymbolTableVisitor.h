@@ -22,7 +22,7 @@ private:
     bool hasErrors;                         // flag pour indiquer des erreurs
 
 public:
-    SymbolTableVisitor() : currentOffset(-8), hasErrors(false) {}
+    SymbolTableVisitor();
 
     // Getter pour la table des symboles
     const std::map<std::string, int> &getSymbolTable() const { return symbolTable; }

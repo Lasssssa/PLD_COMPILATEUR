@@ -1,5 +1,10 @@
 #include "SymbolTableVisitor.h"
 
+SymbolTableVisitor::SymbolTableVisitor() : currentOffset(-8), hasErrors(false) {
+    declaredFunctions.insert("putchar");
+    declaredFunctions.insert("getchar");
+}
+
 antlrcpp::Any SymbolTableVisitor::visitProg(ifccParser::ProgContext *ctx)
 {
     std::cerr << "=== ANALYSE DE LA TABLE DES SYMBOLES ===" << std::endl;
@@ -218,6 +223,12 @@ void SymbolTableVisitor::checkMainFunction()
 }
 
 antlrcpp::Any SymbolTableVisitor::visitCallExpr(ifccParser::CallExprContext *ctx) {
+    std::string calledFunc = ctx->VAR()->getText();
+    // Vérifier si la fonction appelée est déclarée
+    if (declaredFunctions.find(calledFunc) == declaredFunctions.end()) {
+        std::cerr << "ERREUR: Appel à la fonction '" << calledFunc << "' qui n'est pas déclarée !" << std::endl;
+        hasErrors = true;
+    }
     // Visiter tous les arguments de l'appel de fonction
     if (ctx->arg_list()) {
         for (auto expr : ctx->arg_list()->expr()) {
