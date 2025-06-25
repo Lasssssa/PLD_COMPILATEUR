@@ -543,31 +543,18 @@ void CFG::add_bb(BasicBlock *bb)
     bbs.push_back(bb);
 }
 
-#ifdef ARM
-// --- BEGIN AARCH64/CLANG COMPATIBLE PROLOGUE ---
-static void gen_asm_arm_prologue(ostream &o, int nextFreeSymbolIndex)
-{
-    // 16 for x29/x30, 8 bytes per variable
-    int totalSize = 16 + (nextFreeSymbolIndex * 8);
-    // Round up to 16-byte alignment
-    totalSize = ((totalSize + 15) & ~15);
-    o << "\tstp x29, x30, [sp, #-" << totalSize << "]!\n";
-    o << "\tmov x29, sp\n";
-}
-// --- END AARCH64/CLANG COMPATIBLE PROLOGUE ---
-#endif
-
-#ifdef ARM
-// --- BEGIN AARCH64/CLANG COMPATIBLE EPILOGUE ---
 void CFG::gen_asm_epilogue(std::ostream &o)
 {
+#ifdef ARM
     int totalSize = 16 + (nextFreeSymbolIndex * 8);
     totalSize = ((totalSize + 15) & ~15);
     o << "\tldp x29, x30, [sp], #" << totalSize << "\n";
     o << "\tret\n";
-}
-// --- END AARCH64/CLANG COMPATIBLE EPILOGUE ---
+#else
+    o << "\tleave" << endl;
+    o << "\tret" << endl;
 #endif
+}
 
 void CFG::add_to_symbol_table(string name, Type t)
 {
@@ -597,8 +584,17 @@ string CFG::new_BB_name()
     return "BB_" + to_string(nextBBnumber++);
 }
 
-#ifdef ARM
 void CFG::gen_asm_prologue(std::ostream &o) {
-    gen_asm_arm_prologue(o, nextFreeSymbolIndex);
-}
+#ifdef ARM
+    // 16 for x29/x30, 8 bytes per variable
+    int totalSize = 16 + (nextFreeSymbolIndex * 8);
+    // Round up to 16-byte alignment
+    totalSize = ((totalSize + 15) & ~15);
+    o << "\tstp x29, x30, [sp, #-" << totalSize << "]!\n";
+    o << "\tmov x29, sp\n";
+#else
+    o << "\tpushq %rbp" << endl;
+    o << "\tmovq %rsp, %rbp" << endl;
+    o << "\tsubq $" << (nextFreeSymbolIndex * 4) << ", %rsp" << endl;
 #endif
+}
