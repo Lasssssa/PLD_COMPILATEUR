@@ -9,19 +9,18 @@
 #include "antlr4-runtime.h"
 
 using namespace antlr4;
-using namespace std;
 
 int main(int argc, const char* argv[]) {
-    if (argc != 2) {
-        cerr << "Usage: " << argv[0] << " <input_file>" << endl;
+    if (argc < 2) {
+        std::cerr << "Usage: " << argv[0] << " <input_file>" << std::endl;
         return 1;
     }
 
     // Lecture du fichier d'entrée
-    stringstream in;
-    ifstream file(argv[1]);
-    if (!file.is_open()) {
-        cerr << "Error: Could not open file " << argv[1] << endl;
+    std::stringstream in;
+    std::ifstream file(argv[1]);
+    if (!file) {
+        std::cerr << "Error: Could not open file " << argv[1] << std::endl;
         return 1;
     }
     in << file.rdbuf();
@@ -37,7 +36,7 @@ int main(int argc, const char* argv[]) {
 
     // Vérifier les erreurs de syntaxe
     if (parser.getNumberOfSyntaxErrors() != 0) {
-        cerr << "Error: syntax error during parsing" << endl;
+        std::cerr << "Error: syntax error during parsing" << std::endl;
         return 1;
     }
 
@@ -47,7 +46,7 @@ int main(int argc, const char* argv[]) {
 
     // Vérifier s'il y a eu des erreurs sémantiques
     if (symbolTableVisitor.hasSemanticErrors()) {
-        cerr << "Error: semantic errors found during analysis" << endl;
+        std::cerr << "Error: semantic errors found during analysis" << std::endl;
         return 1;
     }
 
