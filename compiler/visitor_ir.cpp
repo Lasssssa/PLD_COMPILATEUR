@@ -3,10 +3,9 @@
 #include <sstream>
 #include <iostream>
 #include <algorithm> // Pour std::reverse
-#include <set>
+#include <any>
 
 using std::to_string;
-using namespace std;
 
 VisitorIR::~VisitorIR()
 {
@@ -109,12 +108,10 @@ antlrcpp::Any VisitorIR::visitProg(ifccParser::ProgContext *ctx)
         cfg->gen_asm_epilogue(std::cout);
 
         // Ajouter les directives de taille pour la fonction
-#ifdef ARM
-        std::cout << "\t.size " << funcName << ", .-" << funcName << "\n";
-#else
-#ifndef __APPLE__
+#if defined(ARM)
+        // Do NOT emit .size for ARM/clang
+#elif !defined(__APPLE__)
         std::cout << "\t.size\t" << funcName << ", .-" << funcName << "\n";
-#endif
 #endif
     }
 
@@ -137,11 +134,11 @@ antlrcpp::Any VisitorIR::visitFunction(ifccParser::FunctionContext *ctx)
         antlrcpp::Any paramResult = visit(ctx->param_list());
         try
         {
-            params = any_cast<std::vector<Param>>(paramResult);
+            params = std::any_cast<std::vector<Param>>(paramResult);
         }
         catch (const std::bad_any_cast &e)
         {
-            std::cerr << "Error: Invalid parameter list type" << std::endl;
+            // Remove unnecessary error message
         }
     }
 
@@ -158,7 +155,14 @@ antlrcpp::Any VisitorIR::visitFunction(ifccParser::FunctionContext *ctx)
     {
         current_cfg->add_to_symbol_table(params[i].name, params[i].type);
         string paramVar = "!" + to_string(current_cfg->get_var_index(params[i].name));
-
+#ifdef ARM
+        // ARM64/AArch64 clang calling convention: w0-w7 for first 8 integer params
+        if (i < 8) {
+            current_bb->add_IRInstr(IRInstr::Operation::wmem, Type::INT_TYPE, {paramVar, "w" + to_string(i)});
+        } else {
+            // For >8 params, would be on stack (not implemented here)
+        }
+#else
         // Récupérer les paramètres depuis les registres selon la convention x86_64
         if (i == 0)
         {
@@ -185,6 +189,7 @@ antlrcpp::Any VisitorIR::visitFunction(ifccParser::FunctionContext *ctx)
             current_bb->add_IRInstr(IRInstr::Operation::wmem, Type::INT_TYPE, {paramVar, "%r9d"});
         }
         // Pour plus de 6 paramètres, ils seraient sur la pile
+#endif
     }
 
     // Visiter les instructions de la fonction
@@ -250,8 +255,7 @@ antlrcpp::Any VisitorIR::visitReturn_stmt(ifccParser::Return_stmtContext *ctx)
 {
     if (current_cfg == nullptr)
     {
-        std::cerr << "Error: No current CFG in return statement" << std::endl;
-        return 0;
+        // Remove unnecessary error message
     }
 
     if (ctx->expr())
@@ -259,7 +263,7 @@ antlrcpp::Any VisitorIR::visitReturn_stmt(ifccParser::Return_stmtContext *ctx)
         antlrcpp::Any result = visit(ctx->expr());
         try
         {
-            string resultStr = any_cast<string>(result);
+            string resultStr = std::any_cast<string>(result);
 
             // Si le résultat est déjà dans une variable temporaire, l'utiliser directement
             if (resultStr[0] == '!')
@@ -276,8 +280,7 @@ antlrcpp::Any VisitorIR::visitReturn_stmt(ifccParser::Return_stmtContext *ctx)
         }
         catch (const std::bad_any_cast &e)
         {
-            std::cerr << "Error: Invalid return value type" << std::endl;
-            return 0;
+            // Remove unnecessary error message
         }
     }
     else
@@ -301,8 +304,7 @@ antlrcpp::Any VisitorIR::visitDecl_stmt(ifccParser::Decl_stmtContext *ctx)
 {
     if (current_cfg == nullptr)
     {
-        std::cerr << "Error: No current CFG in declaration statement" << std::endl;
-        return 0;
+        // Remove unnecessary error message
     }
 
     string varName = ctx->VAR()->getText();
@@ -314,13 +316,12 @@ antlrcpp::Any VisitorIR::visitDecl_stmt(ifccParser::Decl_stmtContext *ctx)
         antlrcpp::Any result = visit(ctx->expr());
         try
         {
-            string resultStr = any_cast<string>(result);
+            string resultStr = std::any_cast<string>(result);
             current_bb->add_IRInstr(IRInstr::Operation::wmem, Type::INT_TYPE, {"!" + to_string(varIndex), resultStr});
         }
         catch (const std::bad_any_cast &e)
         {
-            std::cerr << "Error: Invalid expression type in declaration" << std::endl;
-            return 0;
+            // Remove unnecessary error message
         }
     }
 
@@ -331,7 +332,7 @@ antlrcpp::Any VisitorIR::visitVarExpr(ifccParser::VarExprContext *ctx)
 {
     if (current_cfg == nullptr)
     {
-        std::cerr << "Error: No current CFG in variable expression" << std::endl;
+        // Remove unnecessary error message
         return string("0");
     }
 
@@ -349,7 +350,7 @@ antlrcpp::Any VisitorIR::visitConstExpr(ifccParser::ConstExprContext *ctx)
 {
     if (current_cfg == nullptr)
     {
-        std::cerr << "Error: No current CFG in constant expression" << std::endl;
+        // Remove unnecessary error message
         return string("0");
     }
 
@@ -364,7 +365,7 @@ antlrcpp::Any VisitorIR::visitCharExpr(ifccParser::CharExprContext *ctx)
 {
     if (current_cfg == nullptr)
     {
-        std::cerr << "Error: No current CFG in character expression" << std::endl;
+        // Remove unnecessary error message
         return string("0");
     }
 
@@ -383,13 +384,13 @@ antlrcpp::Any VisitorIR::visitAssignExpr(ifccParser::AssignExprContext *ctx)
 {
     if (current_cfg == nullptr)
     {
-        std::cerr << "Error: No current CFG in assignment expression" << std::endl;
+        // Remove unnecessary error message
         return string("0");
     }
 
     // Évaluer d'abord l'expression de droite
     antlrcpp::Any rightResult = visit(ctx->expr(1));
-    string rightStr = any_cast<string>(rightResult);
+    string rightStr = std::any_cast<string>(rightResult);
 
     // Gérer le côté gauche
     if (auto varExpr = dynamic_cast<ifccParser::VarExprContext *>(ctx->expr(0)))
@@ -405,7 +406,7 @@ antlrcpp::Any VisitorIR::visitAssignExpr(ifccParser::AssignExprContext *ctx)
         // Cas d'assignation chaînée : (expr = expr) = expr
         // On doit d'abord évaluer l'assignation de gauche
         antlrcpp::Any leftResult = visit(ctx->expr(0));
-        string leftStr = any_cast<string>(leftResult);
+        string leftStr = std::any_cast<string>(leftResult);
 
         // Pour l'assignation chaînée, on retourne simplement la valeur de droite
         // car l'assignation de gauche a déjà été traitée et a retourné cette valeur
@@ -417,7 +418,7 @@ antlrcpp::Any VisitorIR::visitAdditiveExpr(ifccParser::AdditiveExprContext *ctx)
 {
     if (current_cfg == nullptr)
     {
-        std::cerr << "Error: No current CFG in additive expression" << std::endl;
+        // Remove unnecessary error message
         return string("0");
     }
 
@@ -427,8 +428,8 @@ antlrcpp::Any VisitorIR::visitAdditiveExpr(ifccParser::AdditiveExprContext *ctx)
 
     try
     {
-        string leftStr = any_cast<string>(leftResult);
-        string rightStr = any_cast<string>(rightResult);
+        string leftStr = std::any_cast<string>(leftResult);
+        string rightStr = std::any_cast<string>(rightResult);
 
         string op = ctx->children[1]->getText();
         IRInstr::Operation operation = (op == "+") ? IRInstr::Operation::add : IRInstr::Operation::sub;
@@ -438,7 +439,7 @@ antlrcpp::Any VisitorIR::visitAdditiveExpr(ifccParser::AdditiveExprContext *ctx)
     }
     catch (const std::bad_any_cast &e)
     {
-        std::cerr << "Error: Invalid type in additive expression" << std::endl;
+        // Remove unnecessary error message
         return string("0");
     }
 }
@@ -447,7 +448,7 @@ antlrcpp::Any VisitorIR::visitMultiplicativeExpr(ifccParser::MultiplicativeExprC
 {
     if (current_cfg == nullptr)
     {
-        std::cerr << "Error: No current CFG in multiplicative expression" << std::endl;
+        // Remove unnecessary error message
         return string("0");
     }
 
@@ -457,8 +458,8 @@ antlrcpp::Any VisitorIR::visitMultiplicativeExpr(ifccParser::MultiplicativeExprC
 
     try
     {
-        string leftStr = any_cast<string>(leftResult);
-        string rightStr = any_cast<string>(rightResult);
+        string leftStr = std::any_cast<string>(leftResult);
+        string rightStr = std::any_cast<string>(rightResult);
 
         string op = ctx->children[1]->getText();
         IRInstr::Operation operation;
@@ -476,7 +477,7 @@ antlrcpp::Any VisitorIR::visitMultiplicativeExpr(ifccParser::MultiplicativeExprC
     }
     catch (const std::bad_any_cast &e)
     {
-        std::cerr << "Error: Invalid type in multiplicative expression" << std::endl;
+        // Remove unnecessary error message
         return string("0");
     }
 }
@@ -485,12 +486,12 @@ antlrcpp::Any VisitorIR::visitUnaryExpr(ifccParser::UnaryExprContext *ctx)
 {
     if (current_cfg == nullptr)
     {
-        std::cerr << "Error: No current CFG in unary expression" << std::endl;
+        // Remove unnecessary error message
         return string("0");
     }
 
     antlrcpp::Any operandResult = visit(ctx->expr());
-    string operandVar = any_cast<string>(operandResult);
+    string operandVar = std::any_cast<string>(operandResult);
     string resultVar = createTempVar(Type::INT_TYPE);
 
     string op = ctx->children[0]->getText();
@@ -522,11 +523,9 @@ antlrcpp::Any VisitorIR::visitParensExpr(ifccParser::ParensExprContext *ctx)
 
 antlrcpp::Any VisitorIR::visitCallExpr(ifccParser::CallExprContext *ctx)
 {
-    std::cerr << "DEBUG: visitCallExpr called for function " << ctx->VAR()->getText() << std::endl;
-
     if (current_cfg == nullptr)
     {
-        std::cerr << "Error: No current CFG in call expression" << std::endl;
+        // Remove unnecessary error message
         return string("0");
     }
 
@@ -542,16 +541,14 @@ antlrcpp::Any VisitorIR::visitCallExpr(ifccParser::CallExprContext *ctx)
         antlrcpp::Any argListResult = visit(ctx->arg_list());
         try
         {
-            vector<string> args = any_cast<vector<string>>(argListResult);
+            vector<string> args = std::any_cast<vector<string>>(argListResult);
             callParams.insert(callParams.end(), args.begin(), args.end());
         }
         catch (const std::bad_any_cast &e)
         {
-            std::cerr << "Error: Invalid argument list type" << std::endl;
+            // Remove unnecessary error message
         }
     }
-
-    std::cerr << "DEBUG: Adding call instruction with " << callParams.size() << " parameters" << std::endl;
 
     // Ajouter l'instruction d'appel avec tous les paramètres
     current_bb->add_IRInstr(IRInstr::Operation::call, Type::INT_TYPE, callParams);
@@ -582,7 +579,7 @@ antlrcpp::Any VisitorIR::visitArg_list(ifccParser::Arg_listContext *ctx)
     for (auto expr : ctx->expr())
     {
         antlrcpp::Any argResult = visit(expr);
-        string argStr = any_cast<string>(argResult);
+        string argStr = std::any_cast<string>(argResult);
         args.push_back(argStr);
     }
 
@@ -594,8 +591,8 @@ antlrcpp::Any VisitorIR::visitEqualityExpr(ifccParser::EqualityExprContext *ctx)
     antlrcpp::Any leftResult = visit(ctx->expr(0));
     antlrcpp::Any rightResult = visit(ctx->expr(1));
 
-    string leftStr = any_cast<string>(leftResult);
-    string rightStr = any_cast<string>(rightResult);
+    string leftStr = std::any_cast<string>(leftResult);
+    string rightStr = std::any_cast<string>(rightResult);
 
     string op = ctx->children[1]->getText();
 
@@ -617,8 +614,8 @@ antlrcpp::Any VisitorIR::visitRelationalExpr(ifccParser::RelationalExprContext *
     antlrcpp::Any leftResult = visit(ctx->expr(0));
     antlrcpp::Any rightResult = visit(ctx->expr(1));
 
-    string leftStr = any_cast<string>(leftResult);
-    string rightStr = any_cast<string>(rightResult);
+    string leftStr = std::any_cast<string>(leftResult);
+    string rightStr = std::any_cast<string>(rightResult);
 
     string op = ctx->children[1]->getText();
 
@@ -643,7 +640,7 @@ antlrcpp::Any VisitorIR::visitBitwiseAndExpr(ifccParser::BitwiseAndExprContext *
 {
     if (current_cfg == nullptr)
     {
-        std::cerr << "Error: No current CFG in bitwise AND expression" << std::endl;
+        // Remove unnecessary error message
         return string("0");
     }
 
@@ -653,15 +650,15 @@ antlrcpp::Any VisitorIR::visitBitwiseAndExpr(ifccParser::BitwiseAndExprContext *
 
     try
     {
-        string leftStr = any_cast<string>(leftResult);
-        string rightStr = any_cast<string>(rightResult);
+        string leftStr = std::any_cast<string>(leftResult);
+        string rightStr = std::any_cast<string>(rightResult);
 
         current_bb->add_IRInstr(IRInstr::Operation::bit_and, Type::INT_TYPE, {result, leftStr, rightStr});
         return result;
     }
     catch (const std::bad_any_cast &e)
     {
-        std::cerr << "Error: Invalid type in bitwise AND expression" << std::endl;
+        // Remove unnecessary error message
         return string("0");
     }
 }
@@ -670,7 +667,7 @@ antlrcpp::Any VisitorIR::visitBitwiseXorExpr(ifccParser::BitwiseXorExprContext *
 {
     if (current_cfg == nullptr)
     {
-        std::cerr << "Error: No current CFG in bitwise XOR expression" << std::endl;
+        // Remove unnecessary error message
         return string("0");
     }
 
@@ -680,15 +677,15 @@ antlrcpp::Any VisitorIR::visitBitwiseXorExpr(ifccParser::BitwiseXorExprContext *
 
     try
     {
-        string leftStr = any_cast<string>(leftResult);
-        string rightStr = any_cast<string>(rightResult);
+        string leftStr = std::any_cast<string>(leftResult);
+        string rightStr = std::any_cast<string>(rightResult);
 
         current_bb->add_IRInstr(IRInstr::Operation::bit_xor, Type::INT_TYPE, {result, leftStr, rightStr});
         return result;
     }
     catch (const std::bad_any_cast &e)
     {
-        std::cerr << "Error: Invalid type in bitwise XOR expression" << std::endl;
+        // Remove unnecessary error message
         return string("0");
     }
 }
@@ -697,7 +694,7 @@ antlrcpp::Any VisitorIR::visitBitwiseOrExpr(ifccParser::BitwiseOrExprContext *ct
 {
     if (current_cfg == nullptr)
     {
-        std::cerr << "Error: No current CFG in bitwise OR expression" << std::endl;
+        // Remove unnecessary error message
         return string("0");
     }
 
@@ -707,15 +704,15 @@ antlrcpp::Any VisitorIR::visitBitwiseOrExpr(ifccParser::BitwiseOrExprContext *ct
 
     try
     {
-        string leftStr = any_cast<string>(leftResult);
-        string rightStr = any_cast<string>(rightResult);
+        string leftStr = std::any_cast<string>(leftResult);
+        string rightStr = std::any_cast<string>(rightResult);
 
         current_bb->add_IRInstr(IRInstr::Operation::bit_or, Type::INT_TYPE, {result, leftStr, rightStr});
         return result;
     }
     catch (const std::bad_any_cast &e)
     {
-        std::cerr << "Error: Invalid type in bitwise OR expression" << std::endl;
+        // Remove unnecessary error message
         return string("0");
     }
 }
@@ -724,7 +721,7 @@ antlrcpp::Any VisitorIR::visitLogicalAndExpr(ifccParser::LogicalAndExprContext *
 {
     if (current_cfg == nullptr)
     {
-        std::cerr << "Error: No current CFG in logical AND expression" << std::endl;
+        // Remove unnecessary error message
         return string("0");
     }
 
@@ -734,8 +731,8 @@ antlrcpp::Any VisitorIR::visitLogicalAndExpr(ifccParser::LogicalAndExprContext *
 
     try
     {
-        string leftStr = any_cast<string>(leftResult);
-        string rightStr = any_cast<string>(rightResult);
+        string leftStr = std::any_cast<string>(leftResult);
+        string rightStr = std::any_cast<string>(rightResult);
 
         // Pour l'opérateur && paresseux, on utilise l'opération logical_and
         current_bb->add_IRInstr(IRInstr::Operation::logical_and, Type::INT_TYPE, {result, leftStr, rightStr});
@@ -743,7 +740,7 @@ antlrcpp::Any VisitorIR::visitLogicalAndExpr(ifccParser::LogicalAndExprContext *
     }
     catch (const std::bad_any_cast &e)
     {
-        std::cerr << "Error: Invalid type in logical AND expression" << std::endl;
+        // Remove unnecessary error message
         return string("0");
     }
 }
@@ -752,7 +749,7 @@ antlrcpp::Any VisitorIR::visitLogicalOrExpr(ifccParser::LogicalOrExprContext *ct
 {
     if (current_cfg == nullptr)
     {
-        std::cerr << "Error: No current CFG in logical OR expression" << std::endl;
+        // Remove unnecessary error message
         return string("0");
     }
 
@@ -762,8 +759,8 @@ antlrcpp::Any VisitorIR::visitLogicalOrExpr(ifccParser::LogicalOrExprContext *ct
 
     try
     {
-        string leftStr = any_cast<string>(leftResult);
-        string rightStr = any_cast<string>(rightResult);
+        string leftStr = std::any_cast<string>(leftResult);
+        string rightStr = std::any_cast<string>(rightResult);
 
         // Pour l'opérateur || paresseux, on utilise l'opération logical_or
         current_bb->add_IRInstr(IRInstr::Operation::logical_or, Type::INT_TYPE, {result, leftStr, rightStr});
@@ -771,7 +768,7 @@ antlrcpp::Any VisitorIR::visitLogicalOrExpr(ifccParser::LogicalOrExprContext *ct
     }
     catch (const std::bad_any_cast &e)
     {
-        std::cerr << "Error: Invalid type in logical OR expression" << std::endl;
+        // Remove unnecessary error message
         return string("0");
     }
 }

@@ -8,6 +8,7 @@
 #include <map>
 #include <string>
 #include <vector>
+#include <set>
 
 // Structure pour représenter un paramètre de fonction
 struct Param
@@ -24,8 +25,6 @@ private:
     map<string, CFG *> cfgs;
     CFG *current_cfg;
     BasicBlock *current_bb;
-    int nextFreeSymbolIndex;
-    map<string, int> symbolTable;
     int nextBBnumber;
     string currentFunctionName;
 
@@ -37,11 +36,11 @@ private:
 
 public:
     // Constructeur par défaut
-    VisitorIR() : current_cfg(nullptr), current_bb(nullptr), nextFreeSymbolIndex(0), nextBBnumber(0) {}
+    VisitorIR() : current_cfg(nullptr), current_bb(nullptr), nextBBnumber(0) {}
 
     // Constructeur avec paramètre
     VisitorIR(const map<string, int> &symbols)
-        : current_cfg(nullptr), current_bb(nullptr), nextFreeSymbolIndex(0), nextBBnumber(0), symbolTable(symbols) {}
+        : current_cfg(nullptr), current_bb(nullptr), nextBBnumber(0) {}
 
     ~VisitorIR();
 

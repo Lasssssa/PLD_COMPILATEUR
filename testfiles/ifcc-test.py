@@ -94,6 +94,7 @@ if run_command(f'cd {pld_base_dir}/compiler && make --question ifcc'):
     if run_command(f'cd {pld_base_dir}/compiler && make ifcc', toscreen=True):
         print(RED("❌ error: compilation of ifcc failed."))
         sys.exit(1)
+status("Build complete! Starting test suite...", icon="🚦", color_func=GREEN)
 
 if args.S or args.c or args.output:
     if args.S and args.c:
@@ -163,6 +164,7 @@ if not inputfiles:
 os.mkdir(test_output_dir)
 jobs = []
 
+status(f"Running {len(inputfiles)} tests...", icon="🏁", color_func=BLUE)
 for f in inputfiles:
     rel = os.path.relpath(f, start=pld_base_dir)
     jobname = rel.replace('..', '-').replace('./', '').replace('/', '-').replace('.c', '')
@@ -172,58 +174,70 @@ for f in inputfiles:
     jobs.append(jobname)
 
 all_ok = True
+num_passed = 0
+num_failed = 0
 
 for job in jobs:
-    SEP()
-    print(BOLD(f"🧪 TEST-CASE: {job}"))
+    if args.verbose:
+        status(f"Starting test job: {job}", icon="🧪", color_func=YELLOW)
     os.chdir(os.path.join(test_output_dir, job))
-
+    if args.verbose >= 2:
+        status("Compiling with GCC (to assembly)...", icon="🛠️", color_func=BLUE)
     gcc_ok = run_command("gcc -S -o asm-gcc.s input.c", "gcc-compile.txt") == 0
     if gcc_ok:
+        if args.verbose >= 2:
+            status("Linking with GCC...", icon="🛠️", color_func=BLUE)
         gcc_ok = run_command("gcc -o exe-gcc asm-gcc.s", "gcc-link.txt") == 0
     if gcc_ok:
-        run_command("./exe-gcc", "gcc-execute.txt")
         if args.verbose >= 2:
-            dumpfile("gcc-execute.txt")
+            status("Running GCC executable...", icon="▶️", color_func=BLUE)
+        run_command("./exe-gcc", "gcc-execute.txt")
 
+    if args.verbose >= 2:
+        status("Compiling with IFCC (to assembly)...", icon="🛠️", color_func=BLUE)
     ifcc_ok = run_command(f'{IFCC} input.c > asm-ifcc.s', "ifcc-compile.txt") == 0
 
     if not gcc_ok and not ifcc_ok:
-        print(GREEN("✅ TEST OK (both rejected the program)"))
-        continue
+        if args.verbose:
+            status(f"Both GCC and IFCC rejected: {job}", icon="⚠️", color_func=YELLOW)
+        continue  # Both rejected, OK, no output
     if not gcc_ok and ifcc_ok:
-        print(RED("❌ TEST FAIL (your compiler accepts an invalid program)"))
+        print(RED(f"❌ TEST FAIL (your compiler accepts an invalid program): {job}"))
         all_ok = False
+        num_failed += 1
         continue
     if gcc_ok and not ifcc_ok:
-        print(RED("❌ TEST FAIL (your compiler rejects a valid program)"))
+        print(RED(f"❌ TEST FAIL (your compiler rejects a valid program): {job}"))
         all_ok = False
-        if args.verbose:
-            dumpfile("asm-ifcc.s")
-            dumpfile("ifcc-compile.txt")
+        num_failed += 1
         continue
 
+    if args.verbose >= 2:
+        status("Linking IFCC output with GCC...", icon="🛠️", color_func=BLUE)
     if run_command("gcc -o exe-ifcc asm-ifcc.s", "ifcc-link.txt"):
-        print(RED("❌ TEST FAIL (your compiler produced invalid assembly)"))
+        print(RED(f"❌ TEST FAIL (your compiler produced invalid assembly): {job}"))
         all_ok = False
-        if args.verbose:
-            dumpfile("asm-ifcc.s")
-            dumpfile("ifcc-link.txt")
+        num_failed += 1
         continue
 
+    if args.verbose >= 2:
+        status("Running IFCC executable...", icon="▶️", color_func=BLUE)
     run_command("./exe-ifcc", "ifcc-execute.txt")
     if open("gcc-execute.txt").read() != open("ifcc-execute.txt").read():
-        print(RED("❌ TEST FAIL (different outputs at runtime)"))
+        print(RED(f"❌ TEST FAIL (different outputs at runtime): {job}"))
         all_ok = False
-        if args.verbose:
-            print(YELLOW("🔸 GCC:"))
-            dumpfile("gcc-execute.txt")
-            print(YELLOW("🔸 IFCC:"))
-            dumpfile("ifcc-execute.txt")
+        num_failed += 1
         continue
-
-    print(GREEN("✅ TEST OK"))
+    if args.verbose:
+        status(f"Test job passed: {job}", icon="✅", color_func=GREEN)
+    num_passed += 1
 
 SEP()
-if not all_ok and not args.verbose:
-    print(YELLOW("⚠️  Some test-cases failed. Use --verbose for more information."))
+print(BOLD("\n📊 Test summary:"))
+print(f"  {GREEN('Passed:')} {num_passed}")
+print(f"  {RED('Failed:')} {num_failed}")
+print(f"  {BOLD('Total:')} {num_passed + num_failed}\n")
+if all_ok:
+    print(GREEN("✅ ALL TESTS PASSED"))
+else:
+    print(RED("❌ SOME TESTS FAILED"))

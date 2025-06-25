@@ -1,12 +1,13 @@
 #include "IR.h"
-
-#include <sstream>
+#include <set>
 
 using std::endl;
 using std::ostream;
 using std::string;
 using std::to_string;
 using std::vector;
+
+static const std::set<std::string> externalFunctions = {"putchar", "getchar"};
 
 string IRInstr::IR_reg_to_asm(string reg)
 {
@@ -20,9 +21,9 @@ string IRInstr::IR_reg_to_asm(string reg)
     {
         int offset = stoi(reg.substr(1));
 #ifdef ARM
-        // Local variables are stored at positive offsets from sp
-        // Ensure 4-byte alignment for 32-bit integers
-        return to_string(4 * (offset + 1)); // +1 to account for return value
+        // Local variables are stored at positive offsets from sp, after 16 bytes for x29/x30
+        // 8 bytes per variable, 16 bytes for frame
+        return to_string(16 + 8 * offset);
 #else
         // Local variables are stored at negative offsets from %rbp
         return to_string(-4 * (offset + 1)) + "(%rbp)";
@@ -75,7 +76,8 @@ void IRInstr::gen_asm_x86(ostream &o)
         if (params[1][0] == '%')
         {
             // Lire depuis un registre
-            o << "\tmovl\t" << params[1] << ", " << IR_reg_to_asm(params[0]) << "\n";
+            o << "\tmovl\t" << params[1] << ", %eax\n";
+            o << "\tmovl\t%eax, " << IR_reg_to_asm(params[0]) << "\n";
         }
         else
         {
@@ -203,8 +205,16 @@ void IRInstr::gen_asm_x86(ostream &o)
             }
         }
 
-        // Appeler la fonction
+        // Appeler la fonction (underscore only for external functions on macOS)
+#ifdef __APPLE__
+        if (externalFunctions.count(params[0])) {
+            o << "\tcall\t_" << params[0] << "\n";
+        } else {
+            o << "\tcall\t" << params[0] << "\n";
+        }
+#else
         o << "\tcall\t" << params[0] << "\n";
+#endif
 
         // Stocker le résultat
         o << "\tmovl\t%eax, " << IR_reg_to_asm(params[1]) << "\n";
@@ -287,10 +297,21 @@ void IRInstr::gen_asm_arm(ostream &o)
 {
     switch (op)
     {
-    case ldconst:
-        o << "\tmov w0, #" << params[1] << "\n";
+    case ldconst: {
+        int value = std::stoi(params[1]);
+        uint32_t uval = static_cast<uint32_t>(value);
+        if (value >= 0 && value <= 65535) {
+            o << "\tmov w0, #" << value << "\n";
+        } else {
+            uint16_t low = uval & 0xFFFF;
+            uint16_t mid = (uval >> 16) & 0xFFFF;
+            o << "\tmovz w0, #" << low << "\n";
+            if (mid)
+                o << "\tmovk w0, #" << mid << ", lsl #16\n";
+        }
         o << "\tstr w0, [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
         break;
+    }
     case add:
         o << "\tldr w0, [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
         o << "\tldr w1, [sp, #" << IR_reg_to_asm(params[2]) << "]\n";
@@ -318,24 +339,36 @@ void IRInstr::gen_asm_arm(ostream &o)
     case mod:
         o << "\tldr w0, [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
         o << "\tldr w1, [sp, #" << IR_reg_to_asm(params[2]) << "]\n";
-        o << "\tsdiv w0, w0, w1\n";
-        o << "\tmov w0, w0\n";
+        o << "\tsdiv w2, w0, w1\n";
+        o << "\tmul w2, w2, w1\n";
+        o << "\tsub w0, w0, w2\n";
         o << "\tstr w0, [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
         break;
     case rmem:
-        o << "\tldr w0, [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
-        o << "\tstr w0, [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
+        if (params[1].size() >= 2 && params[1][0] == 'w' && isdigit(params[1][1])) {
+            // Read from a register (w0-w7)
+            o << "\tmov w0, " << params[1] << "\n";
+            o << "\tstr w0, [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
+        } else {
+            // Read from memory
+            o << "\tldr w0, [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
+            o << "\tstr w0, [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
+        }
         break;
     case wmem:
-        if (params[0] == params[1])
-        {
+        if (params[1].size() >= 2 && params[1][0] == 'w' && isdigit(params[1][1])) {
+            // Write from register to memory (w0-w7)
+            o << "\tstr " << params[1] << ", [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
+        } else if (params[0] == params[1]) {
             break;
+        } else {
+            o << "\tldr w0, [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
+            o << "\tstr w0, [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
         }
-        o << "\tldr w0, [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
-        o << "\tstr w0, [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
         break;
     case ret:
-        o << "\tmovl\t" << IR_reg_to_asm(params[0]) << ", %eax\n";
+        // Always move the return value to w0
+        o << "\tldr w0, [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
         break;
     case not_op:
         o << "\tldr w0, [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
@@ -359,6 +392,85 @@ void IRInstr::gen_asm_arm(ostream &o)
         o << "\tldr w0, [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
         o << "\tldr w1, [sp, #" << IR_reg_to_asm(params[2]) << "]\n";
         o << "\torr w0, w0, w1\n";
+        o << "\tstr w0, [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
+        break;
+    case call:
+        // Parameter passing: w0-w7, stack for more
+        for (size_t i = 2; i < params.size() && i < 10; ++i) {
+            o << "\tldr w" << (i-2) << ", [sp, #" << IR_reg_to_asm(params[i]) << "]\n";
+        }
+        // For >8 params, push to stack (not implemented here)
+#ifdef __APPLE__
+        if (externalFunctions.count(params[0])) {
+            o << "\tbl _" << params[0] << "\n";
+        } else {
+            o << "\tbl " << params[0] << "\n";
+        }
+#else
+        o << "\tbl " << params[0] << "\n";
+#endif
+        o << "\tstr w0, [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
+        break;
+    case logical_and:
+        o << "\tldr w0, [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
+        o << "\tcmp w0, #0\n";
+        o << "\tcset w0, ne\n";
+        o << "\tldr w1, [sp, #" << IR_reg_to_asm(params[2]) << "]\n";
+        o << "\tcmp w1, #0\n";
+        o << "\tcset w1, ne\n";
+        o << "\tand w0, w0, w1\n";
+        o << "\tstr w0, [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
+        break;
+    case logical_or:
+        o << "\tldr w0, [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
+        o << "\tcmp w0, #0\n";
+        o << "\tcset w0, ne\n";
+        o << "\tldr w1, [sp, #" << IR_reg_to_asm(params[2]) << "]\n";
+        o << "\tcmp w1, #0\n";
+        o << "\tcset w1, ne\n";
+        o << "\torr w0, w0, w1\n";
+        o << "\tstr w0, [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
+        break;
+    case cmp_eq:
+        o << "\tldr w0, [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
+        o << "\tldr w1, [sp, #" << IR_reg_to_asm(params[2]) << "]\n";
+        o << "\tcmp w0, w1\n";
+        o << "\tcset w0, eq\n";
+        o << "\tstr w0, [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
+        break;
+    case cmp_ne:
+        o << "\tldr w0, [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
+        o << "\tldr w1, [sp, #" << IR_reg_to_asm(params[2]) << "]\n";
+        o << "\tcmp w0, w1\n";
+        o << "\tcset w0, ne\n";
+        o << "\tstr w0, [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
+        break;
+    case cmp_lt:
+        o << "\tldr w0, [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
+        o << "\tldr w1, [sp, #" << IR_reg_to_asm(params[2]) << "]\n";
+        o << "\tcmp w0, w1\n";
+        o << "\tcset w0, lt\n";
+        o << "\tstr w0, [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
+        break;
+    case cmp_gt:
+        o << "\tldr w0, [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
+        o << "\tldr w1, [sp, #" << IR_reg_to_asm(params[2]) << "]\n";
+        o << "\tcmp w0, w1\n";
+        o << "\tcset w0, gt\n";
+        o << "\tstr w0, [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
+        break;
+    case cmp_le:
+        o << "\tldr w0, [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
+        o << "\tldr w1, [sp, #" << IR_reg_to_asm(params[2]) << "]\n";
+        o << "\tcmp w0, w1\n";
+        o << "\tcset w0, le\n";
+        o << "\tstr w0, [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
+        break;
+    case cmp_ge:
+        o << "\tldr w0, [sp, #" << IR_reg_to_asm(params[1]) << "]\n";
+        o << "\tldr w1, [sp, #" << IR_reg_to_asm(params[2]) << "]\n";
+        o << "\tcmp w0, w1\n";
+        o << "\tcset w0, ge\n";
         o << "\tstr w0, [sp, #" << IR_reg_to_asm(params[0]) << "]\n";
         break;
     }
@@ -401,14 +513,24 @@ void BasicBlock::gen_asm(ostream &o)
     else if (exit_false == nullptr)
     {
         // Branchement inconditionnel
+#ifdef ARM
+        o << "\tb " << exit_true->label << endl;
+#else
         o << "\tjmp " << exit_true->label << endl;
+#endif
     }
     else
     {
         // Branchement conditionnel
+#ifdef ARM
+        o << "\tcmp w0, #0" << endl;
+        o << "\tb.eq " << exit_false->label << endl;
+        o << "\tb " << exit_true->label << endl;
+#else
         o << "\tcmpl $0, %eax" << endl;
         o << "\tje " << exit_false->label << endl;
         o << "\tjmp " << exit_true->label << endl;
+#endif
     }
 }
 
@@ -421,41 +543,12 @@ void CFG::add_bb(BasicBlock *bb)
     bbs.push_back(bb);
 }
 
-static void gen_asm_arm_prologue(ostream &o, int nextFreeSymbolIndex)
-{
-    // Calculate total stack size needed (including alignment)
-    int totalSize = 16 + (nextFreeSymbolIndex * 4); // 16 for frame + variables
-    // Round up to 16-byte alignment
-    totalSize = ((totalSize + 15) & ~15);
-
-    o << "\tsub sp, sp, #" << totalSize << "\n"; // Allocate all stack space at once
-}
-
-static void gen_asm_x86_prologue(ostream &o, int nextFreeSymbolIndex)
-{
-    o << "\tpushq %rbp" << endl;
-    o << "\tmovq %rsp, %rbp" << endl;
-    o << "\tsubq $" << (nextFreeSymbolIndex * 4) << ", %rsp" << endl;
-}
-
-void CFG::gen_asm_prologue(ostream &o)
+void CFG::gen_asm_epilogue(std::ostream &o)
 {
 #ifdef ARM
-    gen_asm_arm_prologue(o, nextFreeSymbolIndex);
-#else
-    gen_asm_x86_prologue(o, nextFreeSymbolIndex);
-#endif
-}
-
-void CFG::gen_asm_epilogue(ostream &o)
-{
-#ifdef ARM
-    // Calculate total stack size needed (including alignment)
-    int totalSize = 16 + (nextFreeSymbolIndex * 4); // 16 for frame + variables
-    // Round up to 16-byte alignment
+    int totalSize = 16 + (nextFreeSymbolIndex * 8);
     totalSize = ((totalSize + 15) & ~15);
-
-    o << "\tadd sp, sp, #" << totalSize << "\n"; // Restore all stack space at once
+    o << "\tldp x29, x30, [sp], #" << totalSize << "\n";
     o << "\tret\n";
 #else
     o << "\tleave" << endl;
@@ -489,4 +582,19 @@ Type CFG::get_var_type(string name)
 string CFG::new_BB_name()
 {
     return "BB_" + to_string(nextBBnumber++);
+}
+
+void CFG::gen_asm_prologue(std::ostream &o) {
+#ifdef ARM
+    // 16 for x29/x30, 8 bytes per variable
+    int totalSize = 16 + (nextFreeSymbolIndex * 8);
+    // Round up to 16-byte alignment
+    totalSize = ((totalSize + 15) & ~15);
+    o << "\tstp x29, x30, [sp, #-" << totalSize << "]!\n";
+    o << "\tmov x29, sp\n";
+#else
+    o << "\tpushq %rbp" << endl;
+    o << "\tmovq %rsp, %rbp" << endl;
+    o << "\tsubq $" << (nextFreeSymbolIndex * 4) << ", %rsp" << endl;
+#endif
 }
