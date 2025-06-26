@@ -15,6 +15,9 @@ Ce dossier contient les fichiers de démonstration du compilateur, organisés du
 9. **09_logical_bitwise.c** — Opérateurs logiques et bit-à-bit
 10. **10_logical_if.c** — Opérateurs logiques dans un if
 11. **11_if_complex.c** — If imbriqué et conditions complexes
+12. **12_putchar_advanced.c** — putchar avancé (affichage de chaîne)
+13. **14_getchar_basic.c** — getchar basique (lecture d'un caractère)
+14. **15_getchar_echo.c** — getchar + putchar (echo de caractère)
 
 ## Utilisation du Makefile
 
@@ -57,6 +60,60 @@ make demo-clean
 2. **Compilation** : `make demo FILE=01_return42.c`
 3. **Exécution** : `make demo-run FILE=01_return42.c`
 4. **Répéter** pour chaque fichier dans l'ordre
+
+## Démonstrations putchar et getchar
+
+### putchar - Affichage de caractères
+
+#### putchar basique (08_putchar.c)
+```bash
+make demo-all FILE=08_putchar.c
+# Affiche : Z
+```
+
+#### putchar avancé (12_putchar_advanced.c)
+```bash
+make demo-all FILE=12_putchar_advanced.c
+# Affiche : Hello World!
+#          (avec nouvelle ligne)
+```
+
+### getchar - Lecture de caractères
+
+#### getchar basique (14_getchar_basic.c)
+```bash
+echo "A" | make demo-all FILE=14_getchar_basic.c
+# Retourne le code ASCII de 'A' (65)
+```
+
+#### getchar avec echo (15_getchar_echo.c)
+```bash
+echo "X" | make demo-all FILE=15_getchar_echo.c
+# Affiche : X
+```
+
+### Utilisation interactive
+
+Pour tester les programmes getchar de manière interactive :
+
+```bash
+# Compiler le programme
+make demo FILE=15_getchar_echo.c
+
+# Lancer en mode interactif
+./15_getchar_echo.bin
+# Puis taper un caractère et appuyer sur Entrée
+```
+
+### Points techniques
+
+- **putchar(int c)** : Affiche le caractère correspondant au code ASCII `c`
+- **getchar()** : Lit un caractère depuis l'entrée standard (stdin)
+- **Codes ASCII** : 'A' = 65, 'a' = 97, '0' = 48, '\n' = 10
+- **Conversion de casse** : 'a' - 32 = 'A', 'A' + 32 = 'a'
+- **getchar retourne -1** : En cas d'erreur ou fin de fichier (EOF)
+- **Limitation** : Le compilateur ne supporte pas les valeurs négatives, ce qui limite certaines opérations arithmétiques sur les caractères
+- **Caractères d'échappement** : Le compilateur ne supporte pas les caractères d'échappement comme `\n`. Utilisez `putchar(10)` pour une nouvelle ligne
 
 ## Notes techniques
 

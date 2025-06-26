@@ -78,11 +78,16 @@ R : Les erreurs sémantiques sont détectées lors de la visite de l'AST (Symbol
   - Pas de support des tableaux, pointeurs, struct
   - Pas d'optimisations avancées (propagation de constantes, dead code elimination)
   - Gestion partielle des variables globales
+  - **Pas de support des valeurs négatives** : Le compilateur ne gère pas les constantes négatives ni les opérations qui produisent des valeurs négatives
+  - **Pas de support des caractères d'échappement** : Les caractères comme `\n`, `\t`, `\r` ne sont pas supportés
+  - **Pas de support du type char** : Le compilateur ne reconnaît pas le type `char`, seuls les entiers sont supportés
+  - **Pas d'opérations sur les caractères** : Les opérations arithmétiques sur les caractères (comme `'a' + 1`) ne sont pas supportées
 - **Perspectives** :
   - Ajout d'optimisations IR
-  - Support de nouveaux types (float, double)
+  - Support de nouveaux types (float, double, char)
   - Gestion complète des variables globales et du .data
   - Extension vers d'autres architectures
+  - Support des valeurs négatives et des caractères d'échappement
 
 ## 1. Introduction et objectifs
 
@@ -283,10 +288,10 @@ AST (arbre de syntaxe abstraite)
 
 ## 3. Front-end : grammaire, parsing, choix syntaxiques
 
-- **Grammaire** : Fichier `ifcc.g4` (ANTLR4), très commenté. Elle définit la syntaxe supportée (fonctions, variables, expressions, if/else, opérateurs arithmétiques, logiques, bit-à-bit, etc.).
-- **Choix syntaxiques** : Syntaxe proche du C, mais simplifiée (pas de pointeurs, pas de tableaux, pas de struct, etc.). Ajout du support des caractères (`'a'`), des opérateurs logiques (`&&`, `||`), et des fonctions à paramètres multiples.
-- **AST** : Utilisation de l'AST généré par ANTLR, pas d'AST maison. Les visiteurs ANTLR sont utilisés pour parcourir l'AST et générer l'IR ou la table des symboles.
-- **Originalité** : La grammaire est conçue pour être facilement extensible (ajout de nouveaux types, de nouvelles constructions syntaxiques).
+- **Grammaire** : Fichier `ifcc.g4` (ANTLR4), très commenté. Elle définit la syntaxe supportée (fonctions, variables, expressions, if/else, opérateurs arithmétiques, logiques, bit-à-bit, etc.).
+- **Choix syntaxiques** : Syntaxe proche du C, mais simplifiée (pas de pointeurs, pas de tableaux, pas de struct, pas de type char, etc.). Support des opérateurs logiques (`&&`, `||`), et des fonctions à paramètres multiples.
+- **AST** : Utilisation de l'AST généré par ANTLR, pas d'AST maison. Les visiteurs ANTLR sont utilisés pour parcourir l'AST et générer l'IR ou la table des symboles.
+- **Originalité** : La grammaire est conçue pour être facilement extensible (ajout de nouveaux types, de nouvelles constructions syntaxiques).
 
 ## 4. Middle-end : analyses statiques, table des symboles, IR, CFG
 
@@ -303,10 +308,10 @@ AST (arbre de syntaxe abstraite)
 
 ## 5. Back-end : génération de code, reciblage, ARM/x86
 
-- **Génération de code** : Fichiers `IR.cpp`/`IR.h`. Chaque instruction IR sait générer son code assembleur pour x86_64 (et ARM en option). Le CFG orchestre la génération du prologue, de l'épilogue, et des blocs de base.
-- **Reciblage** : Le back-end est conçu pour être facilement adaptable à d'autres architectures (ARM déjà partiellement supporté). Les conventions d'appel sont respectées (registres, pile).
-- **Points forts** : Gestion des opérateurs avancés (logiques, bit-à-bit, modulo, etc.), support des fonctions à paramètres multiples, gestion des appels externes (`putchar`, `getchar`).
-- **Points faibles** : Pas de support des tableaux, pointeurs, ni d'optimisations avancées (inlining, propagation de constantes, etc.).
+- **Génération de code** : Fichiers `IR.cpp`/`IR.h`. Chaque instruction IR sait générer son code assembleur pour x86_64 (et ARM en option). Le CFG orchestre la génération du prologue, de l'épilogue, et des blocs de base.
+- **Reciblage** : Le back-end est conçu pour être facilement adaptable à d'autres architectures (ARM déjà partiellement supporté). Les conventions d'appel sont respectées (registres, pile).
+- **Points forts** : Gestion des opérateurs avancés (logiques, bit-à-bit, modulo, etc.), support des fonctions à paramètres multiples.
+- **Points faibles** : Pas de support des tableaux, pointeurs, ni d'optimisations avancées (inlining, propagation de constantes, etc.).
 
 ## 6. Validation et tests
 
