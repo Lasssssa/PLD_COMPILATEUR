@@ -1,3 +1,16 @@
+// IR.CPP : Implémentation des instructions IR, BasicBlock et CFG
+// Ce fichier fait partie du middle-end et du back-end du compilateur.
+// Il définit :
+//   - L'IR (Intermediate Representation) : instructions de type 3-adresses, indépendantes de l'architecture cible
+//   - Le CFG (Control Flow Graph) : graphe de BasicBlocks, modélisant le flot d'exécution réel du programme
+//   - La génération de code assembleur à partir de l'IR et du CFG
+// Le flow global :
+//   1. VisitorIR génère l'IR et le CFG à partir de l'AST
+//   2. Chaque fonction possède son propre CFG (un graphe de BasicBlocks)
+//   3. Chaque BasicBlock contient une séquence d'instructions IR
+//   4. Le CFG est parcouru pour générer le code assembleur, bloc par bloc, dans l'ordre d'exécution
+// Ce découpage permet d'isoler la logique du langage source, de préparer des optimisations, et de faciliter le reciblage assembleur.
+
 #include "IR.h"
 #include <set>
 
@@ -7,36 +20,43 @@ using std::string;
 using std::to_string;
 using std::vector;
 
+// Liste des fonctions externes supportées (pour la gestion des appels externes)
 static const std::set<std::string> externalFunctions = {"putchar", "getchar"};
 
+// Convertit un registre IR ou une variable en format assembleur (x86/ARM)
 string IRInstr::IR_reg_to_asm(string reg)
 {
     if (reg[0] == '%')
     {
-        // If it's already a register, return it as is
+        // Si c'est déjà un registre, on le retourne tel quel
         return reg;
     }
-    // If it's a local variable (format "!X")
+    // Si c'est une variable locale (format !X)
     if (reg[0] == '!')
     {
         int offset = stoi(reg.substr(1));
 #ifdef ARM
-        // Local variables are stored at positive offsets from sp, after 16 bytes for x29/x30
-        // 8 bytes per variable, 16 bytes for frame
+        // Convention ARM64/AArch64 :
+        // Les variables locales sont stockées à des offsets positifs depuis sp, après 16 octets pour x29/x30
+        // 8 octets par variable, alignement 16 octets pour respecter l'ABI
+        // Exemple : la première variable locale est à [sp, #16], la suivante à [sp, #24], etc.
         return to_string(16 + 8 * offset);
 #else
-        // Local variables are stored at negative offsets from %rbp
+        // x86 : variables locales à offset négatif depuis %rbp
         return to_string(-4 * (offset + 1)) + "(%rbp)";
 #endif
     }
-    // For other cases, return the register as is
+    // Autres cas : retourne tel quel
     return reg;
 }
 
-// Implémentation de IRInstr
+// Classe IRInstr : représente une instruction IR de type 3-adresses
+// Chaque instruction IR est indépendante de l'architecture cible et peut être traduite en assembleur x86 ou ARM
+// Les instructions IR sont ajoutées dans les BasicBlocks du CFG
 IRInstr::IRInstr(BasicBlock *bb_, Operation op, Type t, vector<string> params)
     : bb(bb_), op(op), t(t), params(params) {}
 
+// Génère le code assembleur x86 pour cette instruction IR
 void IRInstr::gen_asm_x86(ostream &o)
 {
     switch (op)
@@ -293,6 +313,7 @@ void IRInstr::gen_asm_x86(ostream &o)
     }
 }
 
+// Génère le code assembleur ARM pour cette instruction IR
 void IRInstr::gen_asm_arm(ostream &o)
 {
     switch (op)
@@ -476,19 +497,24 @@ void IRInstr::gen_asm_arm(ostream &o)
     }
 }
 
-BasicBlock::BasicBlock(CFG *cfg, string
-                                     entry_label)
+// Classe BasicBlock : représente un bloc de base du CFG
+// Un BasicBlock est une séquence d'instructions IR sans branchement interne
+// Les BasicBlocks sont reliés entre eux dans le CFG pour modéliser le flot d'exécution (if/else, branchements, etc.)
+// La génération d'assembleur se fait bloc par bloc, dans l'ordre d'exécution du CFG
+BasicBlock::BasicBlock(CFG *cfg, string entry_label)
     : cfg(cfg), label(entry_label), exit_true(nullptr), exit_false(nullptr)
 {
     cfg->add_bb(this);
 }
 
+// Ajoute une instruction IR à ce bloc
 void BasicBlock::add_IRInstr(IRInstr::Operation op, Type t, vector<string> params)
 {
     IRInstr *instr = new IRInstr(this, op, t, params);
     instrs.push_back(instr);
 }
 
+// Génère le code assembleur pour ce bloc (x86 ou ARM)
 void BasicBlock::gen_asm(ostream &o)
 {
     // Génère le label du bloc
@@ -504,11 +530,10 @@ void BasicBlock::gen_asm(ostream &o)
 #endif
     }
 
-    // Gestion des branches
+    // Gestion des branches (contrôle de flot)
     if (exit_true == nullptr)
     {
         // Fin de fonction - ne pas générer l'épilogue ici
-        // L'épilogue sera généré séparément dans visitProg
     }
     else if (exit_false == nullptr)
     {
@@ -534,15 +559,20 @@ void BasicBlock::gen_asm(ostream &o)
     }
 }
 
-// Implémentation de CFG
+// Classe CFG : représente le Control Flow Graph d'une fonction
+// Le CFG contient tous les BasicBlocks d'une fonction et la table des symboles associée
+// Il orchestre la génération du prologue, de l'épilogue, et la génération d'assembleur pour chaque bloc
+// Le CFG permet aussi d'envisager des analyses ou optimisations globales sur la fonction
 CFG::CFG(DefFonction *ast)
     : ast(ast), nextFreeSymbolIndex(0), nextBBnumber(0), current_bb(nullptr) {}
 
+// Ajoute un BasicBlock au CFG
 void CFG::add_bb(BasicBlock *bb)
 {
     bbs.push_back(bb);
 }
 
+// Génère l'épilogue assembleur de la fonction (restaure la pile, retourne)
 void CFG::gen_asm_epilogue(std::ostream &o)
 {
 #ifdef ARM
@@ -556,12 +586,14 @@ void CFG::gen_asm_epilogue(std::ostream &o)
 #endif
 }
 
+// Ajoute une variable à la table des symboles
 void CFG::add_to_symbol_table(string name, Type t)
 {
     SymbolType[name] = t;
     SymbolIndex[name] = nextFreeSymbolIndex++;
 }
 
+// Crée une nouvelle variable temporaire
 string CFG::create_new_tempvar(Type t)
 {
     string name = "!" + to_string(nextFreeSymbolIndex);
@@ -569,26 +601,29 @@ string CFG::create_new_tempvar(Type t)
     return name;
 }
 
+// Récupère l'index d'une variable
 int CFG::get_var_index(string name)
 {
     return SymbolIndex[name];
 }
 
+// Récupère le type d'une variable
 Type CFG::get_var_type(string name)
 {
     return SymbolType[name];
 }
 
+// Génère un nom unique pour un BasicBlock
 string CFG::new_BB_name()
 {
     return "BB_" + to_string(nextBBnumber++);
 }
 
+// Génère le prologue assembleur de la fonction (sauvegarde des registres, allocation de la pile)
 void CFG::gen_asm_prologue(std::ostream &o) {
 #ifdef ARM
-    // 16 for x29/x30, 8 bytes per variable
+    // 16 pour x29/x30, 8 octets par variable
     int totalSize = 16 + (nextFreeSymbolIndex * 8);
-    // Round up to 16-byte alignment
     totalSize = ((totalSize + 15) & ~15);
     o << "\tstp x29, x30, [sp, #-" << totalSize << "]!\n";
     o << "\tmov x29, sp\n";

@@ -22,54 +22,55 @@ class DefFonction;
 #include "type.h"
 #include "symbole.h"
 
-//! The class for one 3-address instruction
+// Classe représentant une instruction IR (3-adresses)
 class IRInstr
 {
 
 public:
-    /** The instructions themselves -- feel free to subclass instead */
+    /** Enumération des opérations IR supportées */
     enum Operation
     {
-        ldconst,
-        add,
-        sub,
-        mul,
-        div,
-        mod,
-        rmem,
-        wmem,
-        call,
-        cmp_eq,
-        cmp_ne,
-        cmp_lt,
-        cmp_gt,
-        cmp_le,
-        cmp_ge,
-        not_op,
-        bit_and,
-        bit_xor,
-        bit_or,
-        logical_and,
-        logical_or,
-        ret
+        ldconst,      // Chargement d'une constante
+        add,          // Addition
+        sub,          // Soustraction
+        mul,          // Multiplication
+        div,          // Division
+        mod,          // Modulo
+        rmem,         // Lecture mémoire
+        wmem,         // Écriture mémoire
+        call,         // Appel de fonction
+        cmp_eq,       // Comparaison ==
+        cmp_ne,       // Comparaison !=
+        cmp_lt,       // Comparaison <
+        cmp_gt,       // Comparaison >
+        cmp_le,       // Comparaison <=
+        cmp_ge,       // Comparaison >=
+        not_op,       // Négation logique (!)
+        bit_and,      // ET binaire
+        bit_xor,      // XOR binaire
+        bit_or,       // OU binaire
+        logical_and,  // ET logique paresseux (&&)
+        logical_or,   // OU logique paresseux (||)
+        ret           // Retour de fonction
     };
 
-    /**  constructor (parameters: see the corresponding attributes) */
+    /** Constructeur (voir les paramètres dans les attributs) */
     IRInstr(BasicBlock *bb_, Operation op, Type t, vector<string> params);
 
-    /** Actual code generation  */
-    void gen_asm_x86(ostream &o); /**< x86 assembly code generation for this IR instruction */
-    void gen_asm_arm(ostream &o); /**< ARM assembly code generation for this IR instruction */
+    /** Génération du code assembleur x86 pour cette instruction IR */
+    void gen_asm_x86(ostream &o);
+    /** Génération du code assembleur ARM pour cette instruction IR */
+    void gen_asm_arm(ostream &o);
 
 protected:
-    string IR_reg_to_asm(string reg); /**< helper method: inputs a IR reg or input variable, returns the proper assembly format */
+    // Convertit un registre IR ou une variable en format assembleur
+    string IR_reg_to_asm(string reg);
 
 private:
-    BasicBlock *bb; /**< The BB this instruction belongs to, which provides a pointer to the CFG this instruction belong to */
-    Operation op;
-    Type t;
-    vector<string> params; /**< For 3-op instrs: d, x, y; for ldconst: d, c;  For call: label, d, params;  for wmem and rmem: choose yourself */
-    // if you subclass IRInstr, each IRInstr subclass has its parameters and the previous (very important) comment becomes useless: it would be a better design.
+    BasicBlock *bb; // BasicBlock auquel appartient cette instruction
+    Operation op;   // Opération IR
+    Type t;         // Type de l'opération
+    vector<string> params; // Paramètres de l'instruction (voir commentaires)
 };
 
 /**  The class for a basic block */

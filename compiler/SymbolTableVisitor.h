@@ -1,3 +1,4 @@
+// SymbolTableVisitor.h : Visiteur pour la construction et la vérification de la table des symboles
 #ifndef SYMBOL_TABLE_VISITOR_H
 #define SYMBOL_TABLE_VISITOR_H
 
@@ -8,32 +9,44 @@
 #include <string>
 #include <iostream>
 
+// Visiteur ANTLR pour la gestion de la table des symboles et des analyses statiques
+// Ce composant fait le lien entre le front-end (AST) et le middle-end (analyses sémantiques)
 class SymbolTableVisitor : public ifccBaseVisitor
 {
 private:
-    std::map<std::string, int> symbolTable; // nom de variable -> offset depuis %rbp
-    std::set<std::string> declaredVars;     // variables locales déclarées
-    std::set<std::string> globalVars;       // variables globales déclarées
-    std::set<std::string> usedVars;         // variables utilisées
-    std::set<std::string> declaredFunctions; // fonctions déclarées
-    std::set<std::string> functionsWithReturn; // fonctions qui ont un return
-    std::string currentFunction;            // nom de la fonction courante
-    int currentOffset;                      // offset actuel (commence à -4, décrémente par 4)
-    bool hasErrors;                         // flag pour indiquer des erreurs
+    // Table des symboles : nom de variable -> offset depuis %rbp
+    std::map<std::string, int> symbolTable;
+    // Variables locales déclarées dans la fonction courante
+    std::set<std::string> declaredVars;
+    // Variables globales déclarées
+    std::set<std::string> globalVars;
+    // Variables utilisées (pour détecter les variables non utilisées)
+    std::set<std::string> usedVars;
+    // Fonctions déclarées
+    std::set<std::string> declaredFunctions;
+    // Fonctions qui possèdent un return
+    std::set<std::string> functionsWithReturn;
+    // Nom de la fonction courante
+    std::string currentFunction;
+    // Offset courant pour l'allocation des variables locales
+    int currentOffset;
+    // Indique s'il y a des erreurs sémantiques
+    bool hasErrors;
+    // Nombre de paramètres pour chaque fonction
     std::map<std::string, int> functionParamCount;
 
 public:
     SymbolTableVisitor();
 
-    // Getter pour la table des symboles
+    // Accès à la table des symboles
     const std::map<std::string, int> &getSymbolTable() const { return symbolTable; }
     bool hasSemanticErrors() const { return hasErrors; }
 
-    // Méthodes de vérification finale
+    // Vérification des variables non utilisées et de la présence de main
     void checkUnusedVariables();
-    void checkMainFunction(); // Nouvelle méthode pour vérifier la présence de main
+    void checkMainFunction(); // Vérifie la présence de main
 
-    // Visiteurs ANTLR
+    // Visiteurs ANTLR pour chaque type de nœud de l'AST
     virtual antlrcpp::Any visitProg(ifccParser::ProgContext *ctx) override;
     virtual antlrcpp::Any visitGlobal_decl(ifccParser::Global_declContext *ctx) override;
     virtual antlrcpp::Any visitDecl_stmt(ifccParser::Decl_stmtContext *ctx) override;
@@ -45,7 +58,7 @@ public:
     virtual antlrcpp::Any visitParam_list(ifccParser::Param_listContext *ctx) override;
     virtual antlrcpp::Any visitReturn_stmt(ifccParser::Return_stmtContext *ctx) override;
     
-    // Ajout des déclarations manquantes
+    // Déclarations manquantes pour la couverture complète de la grammaire
     virtual antlrcpp::Any visitCallExpr(ifccParser::CallExprContext *ctx) override;
     virtual antlrcpp::Any visitConstExpr(ifccParser::ConstExprContext *ctx) override;
     virtual antlrcpp::Any visitCharExpr(ifccParser::CharExprContext *ctx) override;
@@ -63,7 +76,7 @@ public:
     virtual antlrcpp::Any visitIf_stmt(ifccParser::If_stmtContext *ctx) override;
     virtual antlrcpp::Any visitBlock_stmt(ifccParser::Block_stmtContext *ctx) override;
 
-    // Méthodes utilitaires
+    // Méthode utilitaire pour vérifier la présence de return dans les fonctions
     void checkReturnStatements();
 };
 

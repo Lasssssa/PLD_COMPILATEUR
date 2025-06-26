@@ -1,5 +1,7 @@
+// SymbolTableVisitor.cpp : Implémentation du visiteur pour la table des symboles et les analyses statiques
 #include "SymbolTableVisitor.h"
 
+// Constructeur : initialise les structures et ajoute les fonctions externes
 SymbolTableVisitor::SymbolTableVisitor() : currentOffset(-8), hasErrors(false) {
     declaredFunctions.insert("putchar");
     declaredFunctions.insert("getchar");
@@ -7,6 +9,7 @@ SymbolTableVisitor::SymbolTableVisitor() : currentOffset(-8), hasErrors(false) {
     functionParamCount["getchar"] = 0;
 }
 
+// Visite du programme : analyse toutes les déclarations globales et fonctions
 antlrcpp::Any SymbolTableVisitor::visitProg(ifccParser::ProgContext *ctx)
 {
     std::cerr << "=== ANALYSE DE LA TABLE DES SYMBOLES ===" << std::endl;
@@ -29,6 +32,7 @@ antlrcpp::Any SymbolTableVisitor::visitProg(ifccParser::ProgContext *ctx)
     // Vérifier la présence de la fonction main
     checkMainFunction();
 
+    // Affichage de la table des symboles finale
     std::cerr << "=== TABLE DES SYMBOLES FINALE ===" << std::endl;
     for (const auto &pair : symbolTable)
     {
@@ -39,6 +43,7 @@ antlrcpp::Any SymbolTableVisitor::visitProg(ifccParser::ProgContext *ctx)
     return 0;
 }
 
+// Visite d'une fonction : ajoute la fonction à la liste, gère les paramètres et le corps
 antlrcpp::Any SymbolTableVisitor::visitFunction(ifccParser::FunctionContext *ctx)
 {
     std::string funcName = ctx->VAR()->getText();
@@ -53,6 +58,8 @@ antlrcpp::Any SymbolTableVisitor::visitFunction(ifccParser::FunctionContext *ctx
     // Réinitialiser les variables locales pour cette fonction (mais pas les globales)
     declaredVars.clear(); // Seulement les variables locales
     usedVars.clear();
+    // On commence à -8 pour les variables locales : offsets négatifs par rapport à %rbp (convention x86_64)
+    // Cela permet de placer chaque variable locale à une adresse unique sur la pile, sans écraser les paramètres ni le retour
     currentOffset = -8; // Commencer à -8 pour les variables locales
     
     // Traiter les paramètres
@@ -73,9 +80,12 @@ antlrcpp::Any SymbolTableVisitor::visitFunction(ifccParser::FunctionContext *ctx
     return 0;
 }
 
+// Visite de la liste des paramètres : affecte un offset positif à chaque paramètre
 antlrcpp::Any SymbolTableVisitor::visitParam_list(ifccParser::Param_listContext *ctx)
 {
-    // Les paramètres sont stockés à des offsets positifs
+    // Les paramètres sont stockés à des offsets positifs (rarement utilisés ici, car on lit surtout dans les registres)
+    // Convention x86_64 : les 6 premiers paramètres sont passés dans les registres (%rdi, %rsi, %rdx, %rcx, %r8, %r9)
+    // On assigne tout de même un offset pour compatibilité et pour les architectures qui passent tout sur la pile
     int paramOffset = 16; // Commencer après %rbp et l'adresse de retour
     
     for (auto param : ctx->VAR())
@@ -84,12 +94,13 @@ antlrcpp::Any SymbolTableVisitor::visitParam_list(ifccParser::Param_listContext 
         symbolTable[paramName] = paramOffset;
         declaredVars.insert(paramName);
         std::cerr << "Paramètre: '" << paramName << "' assigné à l'offset " << paramOffset << std::endl;
-        paramOffset += 8; // Chaque paramètre prend 8 octets
+        paramOffset += 8; // Chaque paramètre prend 8 octets (alignement stack, même si int = 4)
     }
     
     return 0;
 }
 
+// Visite d'une déclaration de variable locale (avec ou sans initialisation)
 antlrcpp::Any SymbolTableVisitor::visitDecl_stmt(ifccParser::Decl_stmtContext *ctx)
 {
     std::string varName = ctx->VAR()->getText();
@@ -103,12 +114,16 @@ antlrcpp::Any SymbolTableVisitor::visitDecl_stmt(ifccParser::Decl_stmtContext *c
     }
 
     // Ajouter la variable à la table des symboles
+    // On utilise un offset négatif pour placer la variable sur la pile (convention x86_64)
     symbolTable[varName] = currentOffset;
     declaredVars.insert(varName);
 
     std::cerr << "Déclaration: Variable '" << varName << "' assignée à l'offset " << currentOffset << std::endl;
 
     // Décrémenter l'offset pour la prochaine variable (multiple de 4)
+    // Chaque variable locale de type int occupe 4 octets sur la pile (taille d'un int en C).
+    // On décrémente donc l'offset de 4 à chaque déclaration pour réserver l'espace nécessaire.
+    // Cela garantit un accès aligné et compatible avec l'ABI x86_64 pour les types int.
     currentOffset -= 4;
 
     // Si il y a une initialisation, visiter l'expression (côté droit seulement)
@@ -121,6 +136,7 @@ antlrcpp::Any SymbolTableVisitor::visitDecl_stmt(ifccParser::Decl_stmtContext *c
     return 0;
 }
 
+// Visite d'une variable (utilisation dans une expression)
 antlrcpp::Any SymbolTableVisitor::visitVarExpr(ifccParser::VarExprContext *ctx)
 {
     std::string varName = ctx->VAR()->getText();
@@ -141,6 +157,7 @@ antlrcpp::Any SymbolTableVisitor::visitVarExpr(ifccParser::VarExprContext *ctx)
     return 0;
 }
 
+// Visite d'une assignation (variable = expression ou assignation chaînée)
 antlrcpp::Any SymbolTableVisitor::visitAssignExpr(ifccParser::AssignExprContext *ctx)
 {
     std::cerr << "Traitement d'une affectation..." << std::endl;
@@ -183,6 +200,7 @@ antlrcpp::Any SymbolTableVisitor::visitAssignExpr(ifccParser::AssignExprContext 
     return 0;
 }
 
+// Vérifie les variables non utilisées (affiche un avertissement)
 void SymbolTableVisitor::checkUnusedVariables()
 {
     std::cerr << "=== VÉRIFICATION DES VARIABLES NON UTILISÉES ===" << std::endl;
@@ -215,6 +233,7 @@ void SymbolTableVisitor::checkUnusedVariables()
     }
 }
 
+// Vérifie la présence de la fonction main
 void SymbolTableVisitor::checkMainFunction()
 {
     std::cerr << "=== VÉRIFICATION DE LA FONCTION MAIN ===" << std::endl;
@@ -230,6 +249,7 @@ void SymbolTableVisitor::checkMainFunction()
     }
 }
 
+// Visite d'un appel de fonction : vérifie la déclaration et le nombre d'arguments
 antlrcpp::Any SymbolTableVisitor::visitCallExpr(ifccParser::CallExprContext *ctx) {
     std::string calledFunc = ctx->VAR()->getText();
     // Vérifier si la fonction appelée est déclarée
@@ -257,37 +277,38 @@ antlrcpp::Any SymbolTableVisitor::visitCallExpr(ifccParser::CallExprContext *ctx
     return 0;
 }
 
+// Visite d'une constante (rien à faire)
 antlrcpp::Any SymbolTableVisitor::visitConstExpr(ifccParser::ConstExprContext *ctx) {
-    // Rien à faire pour les constantes
     return 0;
 }
 
+// Visite d'une addition ou soustraction (visite les deux opérandes)
 antlrcpp::Any SymbolTableVisitor::visitAdditiveExpr(ifccParser::AdditiveExprContext *ctx) {
-    // Visiter les deux opérandes
     this->visit(ctx->expr(0));
     this->visit(ctx->expr(1));
     return 0;
 }
 
+// Visite d'une multiplication, division ou modulo (visite les deux opérandes)
 antlrcpp::Any SymbolTableVisitor::visitMultiplicativeExpr(ifccParser::MultiplicativeExprContext *ctx) {
-    // Visiter les deux opérandes
     this->visit(ctx->expr(0));
     this->visit(ctx->expr(1));
     return 0;
 }
 
+// Visite d'une expression unaire (visite l'opérande)
 antlrcpp::Any SymbolTableVisitor::visitUnaryExpr(ifccParser::UnaryExprContext *ctx) {
-    // Visiter l'opérande
     this->visit(ctx->expr());
     return 0;
 }
 
+// Visite d'une expression entre parenthèses
 antlrcpp::Any SymbolTableVisitor::visitParensExpr(ifccParser::ParensExprContext *ctx) {
-    // Visiter l'expression entre parenthèses
     this->visit(ctx->expr());
     return 0;
 }
 
+// Visite d'un return (marque la fonction comme ayant un return)
 antlrcpp::Any SymbolTableVisitor::visitReturn_stmt(ifccParser::Return_stmtContext *ctx) {
     std::cerr << "Traitement d'une instruction return dans la fonction '" << currentFunction << "'..." << std::endl;
     
@@ -306,27 +327,28 @@ antlrcpp::Any SymbolTableVisitor::visitReturn_stmt(ifccParser::Return_stmtContex
     return 0;
 }
 
+// Visite d'un ET binaire (&)
 antlrcpp::Any SymbolTableVisitor::visitBitwiseAndExpr(ifccParser::BitwiseAndExprContext *ctx) {
-    // Visiter les deux opérandes
     this->visit(ctx->expr(0));
     this->visit(ctx->expr(1));
     return 0;
 }
 
+// Visite d'un XOR binaire (^)
 antlrcpp::Any SymbolTableVisitor::visitBitwiseXorExpr(ifccParser::BitwiseXorExprContext *ctx) {
-    // Visiter les deux opérandes
     this->visit(ctx->expr(0));
     this->visit(ctx->expr(1));
     return 0;
 }
 
+// Visite d'un OU binaire (|)
 antlrcpp::Any SymbolTableVisitor::visitBitwiseOrExpr(ifccParser::BitwiseOrExprContext *ctx) {
-    // Visiter les deux opérandes
     this->visit(ctx->expr(0));
     this->visit(ctx->expr(1));
     return 0;
 }
 
+// Visite d'une déclaration globale (ajoute à la table des symboles globale)
 antlrcpp::Any SymbolTableVisitor::visitGlobal_decl(ifccParser::Global_declContext *ctx)
 {
     std::string varName = ctx->VAR()->getText();
@@ -356,18 +378,18 @@ antlrcpp::Any SymbolTableVisitor::visitGlobal_decl(ifccParser::Global_declContex
     return 0;
 }
 
-// Nouveau visiteur pour les caractères
+// Visite d'un caractère (rien à faire, traité comme une constante)
 antlrcpp::Any SymbolTableVisitor::visitCharExpr(ifccParser::CharExprContext *ctx) {
-    // Rien à faire pour les caractères, ils sont traités comme des constantes
     return 0;
 }
 
+// Visite d'une instruction expression
 antlrcpp::Any SymbolTableVisitor::visitExpr_stmt(ifccParser::Expr_stmtContext *ctx) {
-    // Visiter l'expression dans l'instruction
     this->visit(ctx->expr());
     return 0;
 }
 
+// Visite d'une égalité (==, !=)
 antlrcpp::Any SymbolTableVisitor::visitEqualityExpr(ifccParser::EqualityExprContext *ctx)
 {
     this->visit(ctx->expr(0));
@@ -375,6 +397,7 @@ antlrcpp::Any SymbolTableVisitor::visitEqualityExpr(ifccParser::EqualityExprCont
     return 0;
 }
 
+// Visite d'une comparaison (<, >, <=, >=)
 antlrcpp::Any SymbolTableVisitor::visitRelationalExpr(ifccParser::RelationalExprContext *ctx)
 {
     this->visit(ctx->expr(0));
@@ -382,28 +405,29 @@ antlrcpp::Any SymbolTableVisitor::visitRelationalExpr(ifccParser::RelationalExpr
     return 0;
 }
 
+// Visite d'une liste d'arguments d'appel de fonction
 antlrcpp::Any SymbolTableVisitor::visitArg_list(ifccParser::Arg_listContext *ctx) {
-    // Visiter tous les arguments
     for (auto expr : ctx->expr()) {
         this->visit(expr);
     }
     return 0;
 }
 
+// Visite d'un ET logique paresseux (&&)
 antlrcpp::Any SymbolTableVisitor::visitLogicalAndExpr(ifccParser::LogicalAndExprContext *ctx) {
-    // Visiter les deux opérandes
     this->visit(ctx->expr(0));
     this->visit(ctx->expr(1));
     return 0;
 }
 
+// Visite d'un OU logique paresseux (||)
 antlrcpp::Any SymbolTableVisitor::visitLogicalOrExpr(ifccParser::LogicalOrExprContext *ctx) {
-    // Visiter les deux opérandes
     this->visit(ctx->expr(0));
     this->visit(ctx->expr(1));
     return 0;
 }
 
+// Visite d'un if/else (analyse la condition et les branches)
 antlrcpp::Any SymbolTableVisitor::visitIf_stmt(ifccParser::If_stmtContext *ctx)
 {
     this->visit(ctx->expr());
@@ -415,6 +439,7 @@ antlrcpp::Any SymbolTableVisitor::visitIf_stmt(ifccParser::If_stmtContext *ctx)
     return 0;
 }
 
+// Visite d'un bloc d'instructions
 antlrcpp::Any SymbolTableVisitor::visitBlock_stmt(ifccParser::Block_stmtContext *ctx)
 {
     for (auto stmt : ctx->stmt())
